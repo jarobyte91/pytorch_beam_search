@@ -9,4 +9,4 @@ The two main classes are found in the main folder:
 * **seq2seq** in *seq2seq.py* implements the generation methods for models that are composed of an encoder and a decoder, like the Transformer.
 * **autoregressive** in *autoregressive.py* implements the generation methods for models that only have a decoder, like GPT.
 
-In the **examples** folder, you can find several task that show how to use the classes.
+In the **examples** folder, you can find several tasks with notebooks that show how to use the classes.
