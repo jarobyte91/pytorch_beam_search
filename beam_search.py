@@ -3,12 +3,15 @@ import torch.nn as nn
 import torch.utils.data as tud
 from tqdm.notebook import tqdm
 from pprint import pprint
-import matplotlib.pyplot as plt
 import numpy as np
+import re
 
 class Seq2Seq(nn.Module):  
-    def tensor2text(self, X):
-        return ["".join([self.out_vocabulary[i] for i in l]) for l in X.tolist()]
+    def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
+        if vocabulary is None:
+            vocabulary = self.out_vocabulary
+        return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()]
+#         return [separator.join([vocabulary[i] for i in l]) for l in X.tolist()]
     
     def text2tensor(self, strings):
         return nn.utils.rnn.pad_sequence([torch.tensor([self.in_vocabulary[c] for c in l]) 
@@ -22,7 +25,7 @@ class Seq2Seq(nn.Module):
             batch_size = 100, 
             lr = 0.0001, 
             verbose = 1,
-            save_path = "models/save_seq2seq.pt"):
+            save_path = None):
         optimizer = torch.optim.Adam(self.parameters(), 
                                      lr)
         criterion = nn.CrossEntropyLoss(ignore_index = 0)
@@ -60,7 +63,8 @@ class Seq2Seq(nn.Module):
                 pprint(((100 * beam[1]).T.round() / 100))
                 print("-" * 50)  
                 self.train()
-        torch.save(self.state_dict(), save_path)
+        if save_path is not None:
+            torch.save(self.state_dict(), save_path)
     
     def greedy_search(self, 
                       X, 
@@ -102,69 +106,99 @@ class Seq2Seq(nn.Module):
                     X, 
                     max_predictions = 20,
                     beam_width = 5,
-                    candidates = 10):
-        Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
-        next_log_probabilities = self.forward(X, Y)
-        log_probabilities, next_chars = next_log_probabilities.squeeze().log_softmax(-1)\
-        .topk(k = candidates, axis = -1)
-#         print("first probabilities")
-#         print(log_probabilities)
-        Y = Y.repeat((candidates, 1))
-#         print("first next chars")
-#         print(next_chars)
-        next_chars = next_chars.reshape(-1, 1)
-#         print(next_chars)
-        Y = torch.cat((Y, next_chars), axis = -1)
-        X_repeated = X.repeat((1, candidates)).reshape(-1, X.shape[1])
-        for i in range(max_predictions - 1):
-#             print(X_repeated)
-#             print(Y)
-            next_log_probabilities= self.forward(X_repeated, Y)[:, -1, :]
-            best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
-            .topk(k = beam_width, axis = -1)
-#             print("best next probabilities")
-#             print(best_next_log_probabilities)
-            best_next_log_probabilities = best_next_log_probabilities.reshape(X.shape[0], -1)
-#             print("best next probabilities reshaped")
-#             print(best_next_log_probabilities)
-#             print("best next chars")
-#             print(next_chars)
+                    candidates = 5,
+                    batch_size = 50, 
+                    verbose = 0):
+        with torch.no_grad():
+            Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
+            dataset = tud.TensorDataset(X, Y)
+            loader = tud.DataLoader(dataset, batch_size = batch_size)
+            next_log_probabilities = []
+            iterator = iter(loader)
+            if verbose > 1:
+                iterator = tqdm(iterator)
+            for x, y in iterator:
+#                 print(i)
+                next_log_probabilities.append(self.forward(x, y)[:, -1, :])
+    #                 print("next_log_probabilities", next_log_probabilities[0].shape)
+            next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
+    #         next_log_probabilities = self.forward(X, Y)
+            log_probabilities, next_chars = next_log_probabilities.squeeze().log_softmax(-1)\
+            .topk(k = candidates, axis = -1)
+    #         print("first probabilities")
+    #         print(log_probabilities)
+            Y = Y.repeat((candidates, 1))
+    #         print("first next chars")
+    #         print(next_chars)
             next_chars = next_chars.reshape(-1, 1)
-#             print(next_chars)
-#             print("Y")
-#             print(Y)
-            Y = torch.cat((Y.repeat((1, beam_width)).reshape(-1, Y.shape[1]), 
-                           next_chars), 
-                          axis = -1)
-#             print("final Y")
-#             print(Y)
-#             log_probabilities = log_probabilities.repeat(beam_width, 1, 1).transpose(2, 0)\
-#             .reshape(X.shape[0], -1)
-            log_probabilities = log_probabilities.repeat(beam_width, 1, 1).permute(1, 2, 0).flatten(start_dim = 1)
-#             print("previous probs")
-#             print(log_probabilities)
-            log_probabilities += best_next_log_probabilities
-#             print("new log probabilities")
-#             print(log_probabilities)
-            log_probabilities, best_candidates = log_probabilities.topk(k = candidates, axis = -1)
-#             print("best candidates")
-#             print(best_candidates)
-            fix_indices = candidates * beam_width * torch.arange(X.shape[0], 
-                                                                 device = next(self.parameters()).device)\
-            .repeat((candidates, 1)).T.flatten()
-#             print("fix indices")
-#             print(fix_indices + best_candidates.flatten())
-            Y = torch.index_select(input = Y, 
-                                   dim = 0, 
-                                   index = fix_indices + best_candidates.flatten())
-#             print("best global Y")
-#             print(Y)
-#             print("best global probabilities")
-#             print(log_probabilities)
-#             print(self.tensor2text(Y.reshape(-1, candidates, i + 1)))
-#             print("-" * 80)
+    #         print(next_chars)
+            Y = torch.cat((Y, next_chars), axis = -1)
+            X_repeated = X.repeat((1, candidates)).reshape(-1, X.shape[1])
+            # This has to be minus one because we already produced a round
+            # of predictions.
+            predictions_iterator = range(max_predictions - 1)
+            if verbose > 0:
+                predictions_iterator = tqdm(predictions_iterator)
+            for i in predictions_iterator:
+    #             print(X_repeated)
+    #             print(Y)
+                dataset = tud.TensorDataset(X_repeated, Y)
+                loader = tud.DataLoader(dataset, batch_size = batch_size)
+                next_log_probabilities = []
+                iterator = iter(loader)
+                if verbose > 1:
+                    iterator = tqdm(iterator)
+                for x, y in iterator:
+                    next_log_probabilities.append(self.forward(x, y)[:, -1, :])
+    #                 print("next_log_probabilities", next_log_probabilities[0].shape)
+                next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
+    #             next_log_probabilities = self.forward(X_repeated, Y)[:, -1, :]
+    #             print("next_log_probabilities", next_log_probabilities.shape)
+                best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
+                .topk(k = beam_width, axis = -1)
+    #             print("best next probabilities")
+    #             print(best_next_log_probabilities)
+                best_next_log_probabilities = best_next_log_probabilities.reshape(X.shape[0], -1)
+    #             print("best next probabilities reshaped")
+    #             print(best_next_log_probabilities)
+    #             print("best next chars")
+    #             print(next_chars)
+                next_chars = next_chars.reshape(-1, 1)
+    #             print(next_chars)
+    #             print("Y", Y.shape)
+    #             print(Y)
+                Y = torch.cat((Y.repeat((1, beam_width)).reshape(-1, Y.shape[1]), 
+                               next_chars), 
+                              axis = -1)
+    #             print("final Y")
+    #             print(Y)
+    #             log_probabilities = log_probabilities.repeat(beam_width, 1, 1).transpose(2, 0)\
+    #             .reshape(X.shape[0], -1)
+                log_probabilities = log_probabilities.repeat(beam_width, 1, 1).permute(1, 2, 0).flatten(start_dim = 1)
+    #             print("previous probs")
+    #             print(log_probabilities)
+                log_probabilities += best_next_log_probabilities
+    #             print("new log probabilities")
+    #             print(log_probabilities)
+                log_probabilities, best_candidates = log_probabilities.topk(k = candidates, axis = -1)
+    #             print("best candidates")
+    #             print(best_candidates)
+                fix_indices = candidates * beam_width * torch.arange(X.shape[0], 
+                                                                     device = next(self.parameters()).device)\
+                .repeat((candidates, 1)).T.flatten()
+    #             print("fix indices")
+    #             print(fix_indices + best_candidates.flatten())
+                Y = torch.index_select(input = Y, 
+                                       dim = 0, 
+                                       index = fix_indices + best_candidates.flatten())
+    #             print("best global Y")
+    #             print(Y)
+    #             print("best global probabilities")
+    #             print(log_probabilities)
+    #             print(self.tensor2text(Y.reshape(-1, candidates, i + 1)))
+    #             print("-" * 80)
 
-        return Y.reshape(-1, candidates, max_predictions + 1), log_probabilities
+            return Y.reshape(-1, candidates, max_predictions + 1), log_probabilities
     
     def generate(self, input_text, 
                  max_predictions = 10,
@@ -201,7 +235,7 @@ class Seq2SeqRNN(Seq2Seq):
         self.encoder = nn.LSTM(input_size = len(in_vocabulary), 
                                hidden_size = encoder_hidden_units, 
                                num_layers = encoder_layers)
-        self.decoder = nn.LSTM(input_size = encoder_hidden_units + len(in_vocabulary), 
+        self.decoder = nn.LSTM(input_size = encoder_hidden_units + len(out_vocabulary), 
                                hidden_size = decoder_hidden_units, 
                                num_layers = decoder_layers)
         self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
@@ -229,8 +263,9 @@ class Transformer(Seq2Seq):
                  decoder_layers = 1,
                  attention_heads = 2):
         super().__init__()
-        self.embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
-        self.positional_embeddings = nn.Embedding(300, embedding_dimension)
+        self.in_embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
+        self.out_embeddings = nn.Embedding(len(out_vocabulary), embedding_dimension)
+        self.positional_embeddings = nn.Embedding(350, embedding_dimension)
         self.transformer = nn.Transformer(d_model = embedding_dimension, 
                                           nhead = attention_heads, 
                                           num_encoder_layers = encoder_layers, 
@@ -241,7 +276,7 @@ class Transformer(Seq2Seq):
         print(f"Net parameters: {sum([t.numel() for t in self.parameters()]):,}")
     
     def forward(self, X, Y):
-        X = self.embeddings(X)
+        X = self.in_embeddings(X)
 #         print("X", X.shape)
         X_positional = torch.arange(X.shape[1], device = next(self.parameters()).device).repeat((X.shape[0], 1))
 #         print(X_positional)
@@ -251,7 +286,7 @@ class Transformer(Seq2Seq):
 #         print("encoder", encoder.shape)
         X = (X + X_positional).transpose(0, 1)
 #         print("X final", X.shape)
-        Y = self.embeddings(Y)
+        Y = self.out_embeddings(Y)
 #         print("Y", Y.shape)
         Y_positional = torch.arange(Y.shape[1], device = next(self.parameters()).device).repeat((Y.shape[0], 1))
 #         print(Y_positional)
