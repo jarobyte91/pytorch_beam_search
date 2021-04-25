@@ -5,8 +5,11 @@ from tqdm.notebook import tqdm
 from pprint import pprint
 import numpy as np
 import re
+import sys
+sys.path.append("../../")
+from seq2seq import Seq2Seq
     
-class Seq2SeqLanguageModel(Seq2Seq)
+class Seq2SeqLanguageModel(Seq2Seq):
     def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
         if vocabulary is None:
             vocabulary = self.out_vocabulary
