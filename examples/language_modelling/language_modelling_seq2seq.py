@@ -54,17 +54,18 @@ class Seq2SeqLanguageModel(Seq2Seq):
                 print("greedy_search")
                 greedy = self.greedy_search(X[:5], 10)
                 pprint(self.tensor2text(greedy[0][:, 1:]))
+                pprint(((100 * greedy[1]).round() / 100))
                 print("sample")
                 pprint(self.tensor2text(self.sample(X[:5], 10)[:, 1:]))
                 print("beam_search")
                 beam = self.beam_search(X[:5], max_predictions = 10, candidates = 5, beam_width = 5)
                 pprint(np.array([self.tensor2text(t) for t in beam[0][:, :, 1:]]).T.tolist())
-                pprint(((100 * greedy[1]).round() / 100))
                 pprint(((100 * beam[1]).T.round() / 100))
                 print("-" * 50)  
                 self.train()
         if save_path is not None:
-            torch.save(self.state_dict(), save_path)    
+            torch.save(self.state_dict(), save_path)
+            
     def generate(self, input_text, 
                  max_predictions = 10,
                  method = "greedy_search", 
@@ -97,26 +98,40 @@ class Seq2SeqRNN(Seq2SeqLanguageModel):
                  decoder_hidden_units = 100,
                  decoder_layers = 1):
         super().__init__()
-        self.encoder = nn.LSTM(input_size = len(in_vocabulary), 
+        self.encoder_rnn = nn.LSTM(input_size = len(in_vocabulary), 
                                hidden_size = encoder_hidden_units, 
                                num_layers = encoder_layers)
-        self.decoder = nn.LSTM(input_size = encoder_hidden_units + len(out_vocabulary), 
+        self.decoder_rnn = nn.LSTM(input_size = encoder_layers * encoder_hidden_units + len(out_vocabulary), 
                                hidden_size = decoder_hidden_units, 
                                num_layers = decoder_layers)
         self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
         self.in_vocabulary = in_vocabulary
         self.out_vocabulary = out_vocabulary
         print(f"Net parameters: {sum([t.numel() for t in self.parameters()]):,}")
+        
+    def encoder(self, X):
+        X = nn.functional.one_hot(X.T, len(self.in_vocabulary)).float()
+#         print("encoder X", X.shape)
+        encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
+        return encoder_last_hidden.transpose(0, 1)
+    
+    def decoder(self, Y, context):
+        context = context.flatten(start_dim = 1).unsqueeze(1)
+        context = context.repeat((1, Y.shape[1], 1))
+#         print("decoder context", context.shape)
+        Y = nn.functional.one_hot(Y, len(self.out_vocabulary)).float()
+        Y = torch.cat((Y, context), axis = -1).transpose(0, 1)
+#         print("decoder Y", Y.shape)
+        decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
+#         print("decoder", decoder.shape)
+        output = self.output_layer(decoder.transpose(0, 1))
+        return output        
     
     def forward(self, X, Y):
-        X = nn.functional.one_hot(X.T, len(self.in_vocabulary)).float()
-        encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder(X)
-        encoder_last_hidden = encoder_last_hidden.repeat((Y.shape[1], 1, 1))
-        Y = nn.functional.one_hot(Y.T, len(self.out_vocabulary)).float()
-        Y = torch.cat((encoder_last_hidden, Y), axis = -1)
-        decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder(Y)
-        output = self.output_layer(decoder).transpose(0, 1)
-        return output
+#         print("X", X.shape)
+        context = self.encoder(X)
+#         print("context", context.shape)
+        return self.decoder(Y, context)
 
     
 class Transformer(Seq2Seq):    
