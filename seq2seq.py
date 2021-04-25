@@ -13,7 +13,8 @@ class Seq2Seq(nn.Module):
         and a decoder method.
         """
         context = self.encoder(X)
-        return self.decoder(Y, context)
+        decoder = self.decoder(Y = Y, context = context)
+        return decoder
 
     def greedy_search(self, 
                       X, 
@@ -81,8 +82,8 @@ class Seq2Seq(nn.Module):
                 iterator = iter(loader)
                 if verbose > 1:
                     iterator = tqdm(iterator)
-                for x, y in iterator:
-                    next_log_probabilities.append(self.decoder(Y = y, context = x)[:, -1, :])
+                for c, y in iterator:
+                    next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
                 next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
                 best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
                 .topk(k = beam_width, axis = -1)

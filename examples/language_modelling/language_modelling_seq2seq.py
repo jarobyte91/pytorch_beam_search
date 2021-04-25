@@ -128,11 +128,12 @@ class Seq2SeqRNN(Seq2SeqLanguageModel):
         return output        
     
     
-class Transformer(Seq2Seq):    
+class Transformer(Seq2SeqLanguageModel):    
     def __init__(self, 
                  in_vocabulary, 
                  out_vocabulary, 
                  embedding_dimension = 100,
+                 feedforward_dimension = 2048,
                  encoder_layers = 1,
                  decoder_layers = 1,
                  attention_heads = 2):
@@ -141,6 +142,7 @@ class Transformer(Seq2Seq):
         self.out_embeddings = nn.Embedding(len(out_vocabulary), embedding_dimension)
         self.positional_embeddings = nn.Embedding(350, embedding_dimension)
         self.transformer = nn.Transformer(d_model = embedding_dimension, 
+                                          dim_feedforward = feedforward_dimension,
                                           nhead = attention_heads, 
                                           num_encoder_layers = encoder_layers, 
                                           num_decoder_layers = decoder_layers)
@@ -149,17 +151,38 @@ class Transformer(Seq2Seq):
         self.out_vocabulary = out_vocabulary
         print(f"Net parameters: {sum([t.numel() for t in self.parameters()]):,}")
     
-    def forward(self, X, Y):
+#     def forward(self, X, Y):
+#         X = self.in_embeddings(X)
+#         X_positional = torch.arange(X.shape[1], device = next(self.parameters()).device).repeat((X.shape[0], 1))
+#         X_positional = self.positional_embeddings(X_positional)
+#         X = (X + X_positional).transpose(0, 1)
+#         Y = self.out_embeddings(Y)
+#         Y_positional = torch.arange(Y.shape[1], device = next(self.parameters()).device).repeat((Y.shape[0], 1))
+#         Y_positional = self.positional_embeddings(Y_positional)
+#         mask = self.transformer.generate_square_subsequent_mask(Y.shape[1]).to(next(self.parameters()).device)
+#         transformer = self.transformer(src = X, 
+#                                        tgt = (Y + Y_positional).transpose(0, 1), 
+#                                        tgt_mask = mask)
+#         output = self.output_layer(transformer.transpose(0, 1))
+#         return output
+    
+    def encoder(self, X):
         X = self.in_embeddings(X)
         X_positional = torch.arange(X.shape[1], device = next(self.parameters()).device).repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
         X = (X + X_positional).transpose(0, 1)
+        encoder_output = self.transformer.encoder(X).transpose(0, 1)
+        return encoder_output
+    
+    def decoder(self, Y, context):
+        context = context.transpose(0, 1)
         Y = self.out_embeddings(Y)
         Y_positional = torch.arange(Y.shape[1], device = next(self.parameters()).device).repeat((Y.shape[0], 1))
         Y_positional = self.positional_embeddings(Y_positional)
-        mask = self.transformer.generate_square_subsequent_mask(Y.shape[1]).to(next(self.parameters()).device)
-        transformer = self.transformer(src = X, 
-                                       tgt = (Y + Y_positional).transpose(0, 1), 
-                                       tgt_mask = mask)
-        output = self.output_layer(transformer.transpose(0, 1))
-        return output
+        Y = (Y + Y_positional).transpose(0, 1)
+        mask = self.transformer.generate_square_subsequent_mask(Y.shape[0]).to(next(self.parameters()).device)
+        decoder_output = self.transformer.decoder(tgt = Y, 
+                                                  memory = context, 
+                                                  tgt_mask = mask)
+        decoder_output = decoder_output.transpose(0, 1)
+        return self.output_layer(decoder_output)
