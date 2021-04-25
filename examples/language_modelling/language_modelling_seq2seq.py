@@ -101,7 +101,7 @@ class Seq2SeqRNN(Seq2SeqLanguageModel):
         self.encoder_rnn = nn.LSTM(input_size = len(in_vocabulary), 
                                hidden_size = encoder_hidden_units, 
                                num_layers = encoder_layers)
-        self.decoder_rnn = nn.LSTM(input_size = encoder_hidden_units + len(out_vocabulary), 
+        self.decoder_rnn = nn.LSTM(input_size = encoder_layers * encoder_hidden_units + len(out_vocabulary), 
                                hidden_size = decoder_hidden_units, 
                                num_layers = decoder_layers)
         self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
@@ -111,19 +111,26 @@ class Seq2SeqRNN(Seq2SeqLanguageModel):
         
     def encoder(self, X):
         X = nn.functional.one_hot(X.T, len(self.in_vocabulary)).float()
+#         print("encoder X", X.shape)
         encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
-        return encoder_last_hidden
+        return encoder_last_hidden.transpose(0, 1)
     
     def decoder(self, Y, context):
-        context = context.repeat((Y.shape[1], 1, 1))
-        Y = nn.functional.one_hot(Y.T, len(self.out_vocabulary)).float()
-        Y = torch.cat((Y, context), axis = -1)
+        context = context.flatten(start_dim = 1).unsqueeze(1)
+        context = context.repeat((1, Y.shape[1], 1))
+#         print("decoder context", context.shape)
+        Y = nn.functional.one_hot(Y, len(self.out_vocabulary)).float()
+        Y = torch.cat((Y, context), axis = -1).transpose(0, 1)
+#         print("decoder Y", Y.shape)
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
-        output = self.output_layer(decoder).transpose(0, 1)
+#         print("decoder", decoder.shape)
+        output = self.output_layer(decoder.transpose(0, 1))
         return output        
     
     def forward(self, X, Y):
+#         print("X", X.shape)
         context = self.encoder(X)
+#         print("context", context.shape)
         return self.decoder(Y, context)
 
     
