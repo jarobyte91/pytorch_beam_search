@@ -10,7 +10,7 @@ class Seq2Seq(nn.Module):
     def forward(self, X, Y):
         """
         Since this class implements an encoder-decoder architecture, its children classes should have an encoder method
-        and a decoder method.
+        and a decoder method. This is done for efficiency reasons in the decoding methods.
         """
         context = self.encoder(X)
         decoder = self.decoder(Y = Y, context = context)

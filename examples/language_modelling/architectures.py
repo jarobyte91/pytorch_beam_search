@@ -7,7 +7,7 @@ import numpy as np
 import re
 import sys
 sys.path.append("../../")
-from seq2seq import Seq2Seq
+from base import Seq2Seq
     
 class Seq2SeqLanguageModel(Seq2Seq):
     def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
@@ -150,21 +150,6 @@ class Transformer(Seq2SeqLanguageModel):
         self.in_vocabulary = in_vocabulary
         self.out_vocabulary = out_vocabulary
         print(f"Net parameters: {sum([t.numel() for t in self.parameters()]):,}")
-    
-#     def forward(self, X, Y):
-#         X = self.in_embeddings(X)
-#         X_positional = torch.arange(X.shape[1], device = next(self.parameters()).device).repeat((X.shape[0], 1))
-#         X_positional = self.positional_embeddings(X_positional)
-#         X = (X + X_positional).transpose(0, 1)
-#         Y = self.out_embeddings(Y)
-#         Y_positional = torch.arange(Y.shape[1], device = next(self.parameters()).device).repeat((Y.shape[0], 1))
-#         Y_positional = self.positional_embeddings(Y_positional)
-#         mask = self.transformer.generate_square_subsequent_mask(Y.shape[1]).to(next(self.parameters()).device)
-#         transformer = self.transformer(src = X, 
-#                                        tgt = (Y + Y_positional).transpose(0, 1), 
-#                                        tgt_mask = mask)
-#         output = self.output_layer(transformer.transpose(0, 1))
-#         return output
     
     def encoder(self, X):
         X = self.in_embeddings(X)
