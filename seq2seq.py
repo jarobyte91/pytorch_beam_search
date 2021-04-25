@@ -6,11 +6,15 @@ from pprint import pprint
 import numpy as np
 import re
 
-class Seq2Seq(nn.Module):   
-    """
-    Since this class implements an encoder-decoder architecture, its children classes should have an encoder method
-    and a decoder method.
-    """
+class Seq2Seq(nn.Module): 
+    def forward(self, X, Y):
+        """
+        Since this class implements an encoder-decoder architecture, its children classes should have an encoder method
+        and a decoder method.
+        """
+        context = self.encoder(X)
+        return self.decoder(Y, context)
+
     def greedy_search(self, 
                       X, 
                       max_predictions = 20):
@@ -46,7 +50,6 @@ class Seq2Seq(nn.Module):
                     batch_size = 50, 
                     verbose = 0):
         with torch.no_grad():
-#             print("X", X.shape)
             Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
             dataset = tud.TensorDataset(X, Y)
             loader = tud.DataLoader(dataset, batch_size = batch_size)
@@ -57,7 +60,7 @@ class Seq2Seq(nn.Module):
             context = []
             for x, y in iterator:
                 c = self.encoder(x)
-                context.append(c.repeat((candidates, 1, 1, 1)).transpose(0, 1).flatten(end_dim = -2))
+                context.append(c.repeat((candidates, 1, 1, 1)).transpose(0, 1).flatten(end_dim = 1))
                 next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
             context = torch.cat(context, axis = 0)
             next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
@@ -66,16 +69,6 @@ class Seq2Seq(nn.Module):
             Y = Y.repeat((candidates, 1))
             next_chars = next_chars.reshape(-1, 1)
             Y = torch.cat((Y, next_chars), axis = -1)
-#             print("X", X.shape)
-            X_repeated = X.repeat((1, candidates)).reshape(-1, X.shape[1])
-            dataset = tud.TensorDataset(X_repeated)
-            loader = tud.DataLoader(dataset)
-#             context_2 = []
-#             for x in iter(loader):
-#                 context_2.append(self.encoder(x[0]))
-#             context_2 = torch.cat(context_2, axis = 0)
-#             print("context difference", (context.flatten() - context_2.flatten()).norm())
-#             print("X", X.shape)
             # This has to be minus one because we already produced a round
             # of predictions before the for loop.
             predictions_iterator = range(max_predictions - 1)
@@ -89,7 +82,6 @@ class Seq2Seq(nn.Module):
                 if verbose > 1:
                     iterator = tqdm(iterator)
                 for x, y in iterator:
-#                     print(y)
                     next_log_probabilities.append(self.decoder(Y = y, context = x)[:, -1, :])
                 next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
                 best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
