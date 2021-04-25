@@ -7,6 +7,10 @@ import numpy as np
 import re
 
 class Seq2Seq(nn.Module):   
+    """
+    Since this class implements an encoder-decoder architecture, its children classes should have an encoder method
+    and a decoder method.
+    """
     def greedy_search(self, 
                       X, 
                       max_predictions = 20):
@@ -58,13 +62,14 @@ class Seq2Seq(nn.Module):
             next_chars = next_chars.reshape(-1, 1)
             Y = torch.cat((Y, next_chars), axis = -1)
             X_repeated = X.repeat((1, candidates)).reshape(-1, X.shape[1])
+            X_repeated = self.encoder(X_repeated)
             # This has to be minus one because we already produced a round
             # of predictions before the for loop.
             predictions_iterator = range(max_predictions - 1)
             if verbose > 0:
                 predictions_iterator = tqdm(predictions_iterator)
             for i in predictions_iterator:
-                dataset = tud.TensorDataset(X_repeated, Y)
+                dataset = tud.TensorDataset(Y, X_repeated)
                 loader = tud.DataLoader(dataset, batch_size = batch_size)
                 next_log_probabilities = []
                 iterator = iter(loader)
