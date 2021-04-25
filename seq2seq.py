@@ -54,12 +54,12 @@ class Seq2Seq(nn.Module):
             iterator = iter(loader)
             if verbose > 1:
                 iterator = tqdm(iterator)
-            context = []
+#             context = []
             for x, y in iterator:
                 c = self.encoder(x)
-                context.append(c.repeat((candidates, 1, 1, 1)).flatten(end_dim = -2))
+#                 context.append(c.repeat((candidates, 1, 1, 1)).flatten(end_dim = -2))
                 next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
-            context = torch.cat(context, axis = 0)
+#             context = torch.cat(context, axis = 0)
             next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
             log_probabilities, next_chars = next_log_probabilities.squeeze().log_softmax(-1)\
             .topk(k = candidates, axis = -1)
@@ -67,7 +67,13 @@ class Seq2Seq(nn.Module):
             next_chars = next_chars.reshape(-1, 1)
             Y = torch.cat((Y, next_chars), axis = -1)
 #             print("X", X.shape)
-#             X = X.repeat((1, candidates)).reshape(-1, X.shape[1])
+            X_repeated = X.repeat((1, candidates)).reshape(-1, X.shape[1])
+            dataset = tud.TensorDataset(X_repeated)
+            loader = tud.DataLoader(dataset)
+            context = []
+            for x in iter(loader):
+                context.append(self.encoder(x[0]))
+            context = torch.cat(context, axis = 0)
 #             print("X", X.shape)
             # This has to be minus one because we already produced a round
             # of predictions before the for loop.
