@@ -6,6 +6,9 @@ from pprint import pprint
 import numpy as np
 from timeit import default_timer as timer
 import pandas as pd
+import re
+import pickle
+
 
 class Seq2Seq(nn.Module):         
     def forward(self, X, Y):
@@ -186,9 +189,10 @@ class Seq2Seq(nn.Module):
                            "learning_rate": learning_rate,
                            "weight_decay": weight_decay})
             performance.append(status)
-            if save_path is not None:                   
-                if not dev or (e < 2) or (performance[-1]["dev_loss"] < performance[-2]["dev_loss"]):
+            if save_path is not None:  
+                if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"] for p in performance[:-1]])):
                     torch.save(self.state_dict(), save_path)
+                    print("save")
             status_string += f" | {t:>13.2f}"
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
@@ -206,10 +210,6 @@ class Seq2Seq(nn.Module):
             else:
                 print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
         print()
-        
-    def save_architecture(self, path):
-        with open(path, "wb") as file:
-            pickle.dump(self.architecture, file)
             
     def evaluate(self, X, Y, criterion, batch_size = 100, verbose = False):
         dataset = tud.TensorDataset(X, Y)
@@ -239,6 +239,50 @@ class Seq2Seq(nn.Module):
             error_rate = 100 * sum(errors) / sum(sizes)
         return loss, error_rate   
     
+    def predict(self, 
+                X, 
+                max_predictions = None, 
+                method = "beam_search",
+                main_batch_size = 100,
+                main_verbose = False,
+                **kwargs):
+        if max_predictions is None:
+            max_predictions = X.shape[1]
+        self.eval()
+        dataset = tud.TensorDataset(X.to(next(self.parameters()).device))
+        loader = tud.DataLoader(dataset, batch_size = main_batch_size)
+        final_indexes = []
+        final_log_probabilities = []
+        iterator = iter(loader)
+        if main_verbose:
+            iterator = tqdm(iterator)
+        if method == "beam_search":
+            for x in iterator:
+                indexes, log_probabilities = self.beam_search(X = X, 
+                                                              max_predictions = max_predictions, 
+                                                              **kwargs)
+                # In this case, we only return the best candidate for each example
+                final_indexes.append(indexes[:, 0, :])
+                final_log_probabilities.append(log_probabilities)
+        elif method == "greedy_search":
+            for x in iterator:
+                indexes, log_probabilities = self.greedy_search(X = X, 
+                                                                max_predictions = max_predictions, 
+                                                                **kwargs)
+                final_indexes.append(indexes)
+                final_log_probabilities.append(log_probabilities)
+        elif method == "sample":
+            for x in iterator:
+                indexes, log_probabilities = self.sample(X = X, 
+                                                         max_predictions = max_predictions, 
+                                                         **kwargs)        
+                final_indexes.append(indexes)
+        else:
+            raise ValueError("Decoding method not implemented")
+        final_indexes = torch.cat(final_indexes, axis = 0)
+        final_log_probabilities = torch.cat(final_log_probabilities, axis = 0)
+        return final_indexes, final_log_probabilities
+    
     
 class Seq2SeqRNN(Seq2Seq):
     def __init__(self, 
@@ -254,16 +298,17 @@ class Seq2SeqRNN(Seq2Seq):
         super().__init__()
         self.in_embeddings = nn.Embedding(len(in_vocabulary), in_embedding_dimension)
         self.out_embeddings = nn.Embedding(len(out_vocabulary), out_embedding_dimension)
-        self.encoder_rnn = nn.LSTM(input_size = len(in_vocabulary), 
+        self.encoder_rnn = nn.LSTM(input_size = in_embedding_dimension, 
                                    hidden_size = encoder_hidden_units, 
                                    num_layers = encoder_layers,
                                    dropout = dropout)
-        self.decoder_rnn = nn.LSTM(input_size = encoder_layers * encoder_hidden_units + len(out_vocabulary), 
+        self.decoder_rnn = nn.LSTM(input_size = encoder_layers * encoder_hidden_units + out_embedding_dimension, 
                                    hidden_size = decoder_hidden_units, 
                                    num_layers = decoder_layers,
                                    dropout = dropout)
         self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
-        self.architecture = dict(in_vocabulary = in_vocabulary, 
+        self.architecture = dict(model = "Seq2Seq RNN",
+                                 in_vocabulary = in_vocabulary, 
                                  out_vocabulary = out_vocabulary, 
                                  in_embedding_dimension = in_embedding_dimension,
                                  out_embedding_dimension = out_embedding_dimension,
@@ -271,18 +316,19 @@ class Seq2SeqRNN(Seq2Seq):
                                  encoder_layers = encoder_layers,
                                  decoder_hidden_units = decoder_hidden_units,
                                  decoder_layers = decoder_layers,
-                                 dropout = dropout)
+                                 dropout = dropout,
+                                 parameters = sum([t.numel() for t in self.parameters()]))
         self.print_architecture()
         
     def encoder(self, X):
-        X = self.in_embeddings(X)
+        X = self.in_embeddings(X.T)
         encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
         return encoder_last_hidden.transpose(0, 1)
     
     def decoder(self, Y, context):
         context = context.flatten(start_dim = 1).unsqueeze(1)
         context = context.repeat((1, Y.shape[1], 1)).transpose(0, 1)
-        Y = self.out_embeddings(Y)
+        Y = self.out_embeddings(Y.T)
         Y = torch.cat((Y, context), axis = -1)
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
         output = self.output_layer(decoder.transpose(0, 1))
@@ -312,7 +358,8 @@ class Transformer(Seq2Seq):
                                           activation = activation,
                                           dropout = dropout)
         self.output_layer = nn.Linear(embedding_dimension, len(out_vocabulary))
-        self.architecture = dict(in_vocabulary = in_vocabulary,
+        self.architecture = dict(model = "Transformer",
+                                 in_vocabulary = in_vocabulary,
                                  out_vocabulary = out_vocabulary,
                                  embedding_dimension = embedding_dimension,
                                  feedforward_dimension = feedforward_dimension,
@@ -320,7 +367,8 @@ class Transformer(Seq2Seq):
                                  decoder_layers = decoder_layers,
                                  attention_heads = attention_heads,
                                  activation = activation,
-                                 dropout = dropout)
+                                 dropout = dropout,
+                                 parameters = sum([t.numel() for t in self.parameters()]))
         self.print_architecture()
         
     def encoder(self, X):
