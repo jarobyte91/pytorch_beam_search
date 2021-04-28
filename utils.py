@@ -1,5 +1,6 @@
 import pickle
 import re
+import torch
 import torch.nn as nn
 import seq2seq
 
@@ -30,7 +31,7 @@ def load_architecture(path):
                             dropout = architecture["dropout"],
                             attention_heads = architecture["attention_heads"])
     else:
-        raise Exception("Unknown architecture")
+        raise Exception(f"Unknown architecture: {architecture['model']}")
     return model
     
 def tensor2text(X, vocabulary, separator = "", end = "<END>"):

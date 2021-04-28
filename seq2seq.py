@@ -258,7 +258,7 @@ class Seq2Seq(nn.Module):
             iterator = tqdm(iterator)
         if method == "beam_search":
             for x in iterator:
-                indexes, log_probabilities = self.beam_search(X = X, 
+                indexes, log_probabilities = self.beam_search(X = x[0], 
                                                               max_predictions = max_predictions, 
                                                               **kwargs)
                 # In this case, we only return the best candidate for each example
@@ -266,14 +266,14 @@ class Seq2Seq(nn.Module):
                 final_log_probabilities.append(log_probabilities)
         elif method == "greedy_search":
             for x in iterator:
-                indexes, log_probabilities = self.greedy_search(X = X, 
+                indexes, log_probabilities = self.greedy_search(X = x[0], 
                                                                 max_predictions = max_predictions, 
                                                                 **kwargs)
                 final_indexes.append(indexes)
                 final_log_probabilities.append(log_probabilities)
         elif method == "sample":
             for x in iterator:
-                indexes, log_probabilities = self.sample(X = X, 
+                indexes, log_probabilities = self.sample(X = x[0], 
                                                          max_predictions = max_predictions, 
                                                          **kwargs)        
                 final_indexes.append(indexes)
