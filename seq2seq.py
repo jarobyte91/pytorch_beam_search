@@ -153,10 +153,6 @@ class Seq2Seq(nn.Module):
             train_iterator = train_loader
             if verbose > 1:
                 train_iterator = tqdm(train_iterator)
-#             if dev:
-#                 dev_iterator = dev_loader
-#                 if verbose > 1: 
-#                     dev_iterator = tqdm(dev_iterator)
             for x, y in train_iterator:
                 log_probabilities = self.forward(x, y).transpose(1, 2)[:, :, :-1]
                 y = y[:, 1:]
