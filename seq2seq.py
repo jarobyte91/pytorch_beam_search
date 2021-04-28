@@ -10,8 +10,8 @@ import pandas as pd
 class Seq2Seq(nn.Module):         
     def forward(self, X, Y):
         """
-        Since this class implements an encoder-decoder architecture, its children classes should have an encoder method
-        and a decoder method. This is done for efficiency reasons in the decoding methods.
+        Since this class implements an encoder-decoder architecture, its children classes should have an encoder 
+        method and a decoder method. This is done for efficiency reasons in the decoding methods.
         """
         context = self.encoder(X)
         decoder = self.decoder(Y = Y, context = context)
@@ -93,7 +93,10 @@ class Seq2Seq(nn.Module):
                 Y = torch.cat((Y.repeat((1, beam_width)).reshape(-1, Y.shape[1]), 
                                next_chars), 
                               axis = -1)
-                log_probabilities = log_probabilities.repeat(beam_width, 1, 1).permute(1, 2, 0).flatten(start_dim = 1)
+                log_probabilities = log_probabilities\
+                                    .repeat(beam_width, 1, 1)\
+                                    .permute(1, 2, 0)\
+                                    .flatten(start_dim = 1)
                 log_probabilities += best_next_log_probabilities
                 log_probabilities, best_candidates = log_probabilities.topk(k = candidates, axis = -1)
                 fix_indices = candidates * beam_width * torch.arange(X.shape[0], 
@@ -192,7 +195,8 @@ class Seq2Seq(nn.Module):
                     torch.save(self.state_dict(), save_path)
             status_string += f" | {t:>13.2f}"
             print(status_string)
-        return pd.concat((pd.DataFrame(performance), pd.DataFrame([self.architecture for i in performance])), axis = 1)\
+        return pd.concat((pd.DataFrame(performance), 
+                          pd.DataFrame([self.architecture for i in performance])), axis = 1)\
                .drop(columns = ["in_vocabulary", "out_vocabulary"])
     
     def print_architecture(self):
