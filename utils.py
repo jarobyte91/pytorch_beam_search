@@ -33,11 +33,12 @@ def load_architecture(path):
     else:
         raise Exception(f"Unknown architecture: {architecture['model']}")
     return model
-    
-def tensor2text(X, vocabulary, separator = "", end = "<END>"):
-    return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()]
 
-def text2tensor(strings, vocabulary):
-    return nn.utils.rnn.pad_sequence([torch.tensor([vocabulary[c] for c in l]) 
+def text2tensor(strings, model):
+    return nn.utils.rnn.pad_sequence([torch.tensor([model.architecture["in_vocabulary"][c] for c in l]) 
                                       for l in strings], 
                                      batch_first = True)
+
+def tensor2text(X, model, separator = "", end = "<END>"):
+    return [re.sub(end + ".*", end, separator.join([model.architecture["out_vocabulary"][i] for i in l])) for l in X.tolist()]
+

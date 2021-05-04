@@ -192,7 +192,6 @@ class Seq2Seq(nn.Module):
             if save_path is not None:  
                 if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"] for p in performance[:-1]])):
                     torch.save(self.state_dict(), save_path)
-                    print("save")
             status_string += f" | {t:>13.2f}"
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
