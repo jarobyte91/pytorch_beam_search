@@ -327,12 +327,12 @@ class Seq2SeqRNN(Seq2Seq):
     def __init__(self, 
                  in_vocabulary, 
                  out_vocabulary, 
-                 in_embedding_dimension = 64,
-                 out_embedding_dimension = 64,
-                 encoder_hidden_units = 128, 
-                 encoder_layers = 1,
-                 decoder_hidden_units = 128,
-                 decoder_layers = 1,
+                 in_embedding_dimension = 8,
+                 out_embedding_dimension = 8,
+                 encoder_hidden_units = 32, 
+                 encoder_layers = 2,
+                 decoder_hidden_units = 32,
+                 decoder_layers = 2,
                  dropout = 0.0):
         super().__init__()
         self.in_embeddings = nn.Embedding(len(in_vocabulary), in_embedding_dimension)
@@ -376,18 +376,19 @@ class Seq2SeqRNN(Seq2Seq):
 class Transformer(Seq2Seq):    
     def __init__(self, 
                  in_vocabulary, 
-                 out_vocabulary, 
-                 embedding_dimension = 64,
-                 feedforward_dimension = 128,
-                 encoder_layers = 1,
-                 decoder_layers = 1,
+                 out_vocabulary,
+                 max_sequence_length = 32,
+                 embedding_dimension = 8,
+                 feedforward_dimension = 32,
+                 encoder_layers = 2,
+                 decoder_layers = 2,
                  attention_heads = 2,
                  activation = "relu",
                  dropout = 0.0):
         super().__init__()
         self.in_embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
         self.out_embeddings = nn.Embedding(len(out_vocabulary), embedding_dimension)
-        self.positional_embeddings = nn.Embedding(350, embedding_dimension)
+        self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
         self.transformer = nn.Transformer(d_model = embedding_dimension, 
                                           dim_feedforward = feedforward_dimension,
                                           nhead = attention_heads, 
