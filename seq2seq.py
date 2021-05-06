@@ -40,15 +40,22 @@ class Seq2Seq(nn.Module):
     def sample(self, 
                X, 
                max_predictions = 20,
-               temperature = 1):
-        Y = torch.ones(X.shape[0], 1).long().to(next(self.parameters()).device)
-        for i in range(max_predictions):
-            next_log_probabilities = self.forward(X, Y)[:, -1]
-            next_probabilities = (next_log_probabilities / temperature).softmax(1)
-            random = torch.rand((next_probabilities.shape[0], 1)).to(next(self.parameters()).device)
-            next_chars = ((next_probabilities.cumsum(1) < random).sum(1, keepdims = True))
-            Y = torch.cat((Y, next_chars), axis = 1)
-        return Y
+               temperature = 1,
+               verbose = False):
+        with torch.no_grad():
+            Y = torch.ones(X.shape[0], 1).long().to(next(self.parameters()).device)
+            log_probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
+            iterator = range(max_predictions)
+            if verbose:
+                iterator = tqdm(iterator)
+            for i in iterator:
+                next_log_probabilities = self.forward(X, Y)[:, -1]
+                next_probabilities = (next_log_probabilities / temperature).softmax(1)
+                random = torch.rand((next_probabilities.shape[0], 1)).to(next(self.parameters()).device)
+                next_chars = ((next_probabilities.cumsum(1) < random).sum(1, keepdims = True))
+                log_probabilities += torch.gather(input = next_probabilities.log(), dim = 1, index = next_chars).squeeze()
+                Y = torch.cat((Y, next_chars), axis = 1)
+            return Y, log_probabilities
 
     def beam_search(self, 
                     X, 
@@ -119,7 +126,7 @@ class Seq2Seq(nn.Module):
             X_dev = None, 
             Y_dev = None, 
             batch_size = 100, 
-            epochs = 10, 
+            epochs = 5, 
             learning_rate = 0.0001, 
             verbose = 0, 
             weight_decay = 0, 
