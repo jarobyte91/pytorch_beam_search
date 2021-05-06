@@ -9,7 +9,6 @@ import pandas as pd
 import re
 import pickle
 
-
 class Seq2Seq(nn.Module):         
     def forward(self, X, Y):
         """
@@ -22,11 +21,15 @@ class Seq2Seq(nn.Module):
 
     def greedy_search(self, 
                       X, 
-                      max_predictions = 20):
+                      max_predictions = 20,
+                      verbose = False):
         with torch.no_grad():
             Y = torch.ones(X.shape[0], 1).long().to(next(self.parameters()).device)
             log_probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
-            for i in range(max_predictions):
+            iterator = range(max_predictions)
+            if verbose:
+                iterator = tqdm(iterator)
+            for i in iterator:
                 next_log_probabilities = self.forward(X, Y)[:, -1].log_softmax(-1)
                 max_next_log_probabilities, next_chars = next_log_probabilities.max(-1)
                 next_chars = next_chars.unsqueeze(-1)
@@ -282,7 +285,37 @@ class Seq2Seq(nn.Module):
         final_log_probabilities = torch.cat(final_log_probabilities, axis = 0)
         return final_indexes, final_log_probabilities
     
-    
+    def save_architecture(self, path):
+        with open(path, "wb") as file:
+            pickle.dump(self.architecture, file)
+
+    def text2tensor(self, strings, vocabulary = None, device = None):
+        if vocabulary is None:
+            vocabulary = self.architecture["in_vocabulary"]
+        if device is None:
+            device = next(self.parameters()).device
+        return nn.utils.rnn.pad_sequence([torch.tensor([vocabulary[c] for c in l]) 
+                                          for l in strings], 
+                                         batch_first = True).to(device)
+
+    def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
+        if vocabulary is None:
+            vocabulary = self.architecture["out_vocabulary"]
+        return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()] 
+
+def load_architecture(path):
+    with open(path, "rb") as file:
+        architecture = pickle.load(file)
+    name = architecture.pop("model")
+    architecture.pop("parameters")
+    if name == "Seq2Seq RNN":
+        model = Seq2SeqRNN(**architecture)
+    elif name == "Transformer":
+        model = Transformer(**architecture)
+    else:
+        raise Exception(f"Unknown architecture: {architecture['model']}")
+    return model
+        
 class Seq2SeqRNN(Seq2Seq):
     def __init__(self, 
                  in_vocabulary, 
@@ -332,7 +365,6 @@ class Seq2SeqRNN(Seq2Seq):
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
         output = self.output_layer(decoder.transpose(0, 1))
         return output        
-    
     
 class Transformer(Seq2Seq):    
     def __init__(self, 
@@ -389,4 +421,4 @@ class Transformer(Seq2Seq):
                                                   memory = context, 
                                                   tgt_mask = mask)
         decoder_output = decoder_output.transpose(0, 1)
-        return self.output_layer(decoder_output)
+        return self.output_layer(decoder_output)  
