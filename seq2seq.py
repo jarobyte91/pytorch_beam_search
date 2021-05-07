@@ -66,38 +66,40 @@ class Seq2Seq(nn.Module):
                     verbose = 0):
         with torch.no_grad():
             Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
-            dataset = tud.TensorDataset(X, Y)
-            loader = tud.DataLoader(dataset, batch_size = batch_size)
-            next_log_probabilities = []
-            iterator = iter(loader)
-            if verbose > 1:
-                iterator = tqdm(iterator)
-            context = []
-            for x, y in iterator:
-                c = self.encoder(x)
-                context.append(c.repeat((candidates, 1, 1, 1)).transpose(0, 1).flatten(end_dim = 1))
-                next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
-            context = torch.cat(context, axis = 0)
-            next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
+#             dataset = tud.TensorDataset(X, Y)
+#             loader = tud.DataLoader(dataset, batch_size = batch_size)
+#             next_log_probabilities = []
+#             iterator = iter(loader)
+#             if verbose > 1:
+#                 iterator = tqdm(iterator)
+#             context = []
+#             for x, y in iterator:
+#                 c = self.encoder(x)
+#                 context.append(c.repeat((candidates, 1, 1, 1)).transpose(0, 1).flatten(end_dim = 1))
+#                 next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
+#             context = torch.cat(context, axis = 0)
+#             next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
+            next_log_probabilities = self.forward(X, Y)[:, -1, :]
             log_probabilities, next_chars = next_log_probabilities.squeeze().log_softmax(-1)\
             .topk(k = candidates, axis = -1)
             Y = Y.repeat((candidates, 1))
             next_chars = next_chars.reshape(-1, 1)
             Y = torch.cat((Y, next_chars), axis = -1)
+            X_repeated = X.repeat((candidates, 1, 1)).transpose(0, 1).flatten(end_dim = 1)
             # This has to be minus one because we already produced a round
             # of predictions before the for loop.
             predictions_iterator = range(max_predictions - 1)
             if verbose > 0:
                 predictions_iterator = tqdm(predictions_iterator)
             for i in predictions_iterator:
-                dataset = tud.TensorDataset(context, Y)
+                dataset = tud.TensorDataset(X_repeated, Y)
                 loader = tud.DataLoader(dataset, batch_size = batch_size)
                 next_log_probabilities = []
                 iterator = iter(loader)
                 if verbose > 1:
                     iterator = tqdm(iterator)
-                for c, y in iterator:
-                    next_log_probabilities.append(self.decoder(Y = y, context = c)[:, -1, :])
+                for x, y in iterator:
+                    next_log_probabilities.append(self.forward(x, y)[:, -1, :])
                 next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
                 best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
                 .topk(k = beam_width, axis = -1)
