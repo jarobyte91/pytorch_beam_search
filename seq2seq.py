@@ -10,15 +10,6 @@ import re
 import pickle
 
 class Seq2Seq(nn.Module):         
-    def forward(self, X, Y):
-        """
-        Since this class implements an encoder-decoder architecture, its children classes should have an encoder 
-        method and a decoder method. This is done for efficiency reasons in the decoding methods.
-        """
-        context = self.encoder(X)
-        decoder = self.decoder(Y = Y, context = context)
-        return decoder
-
     def greedy_search(self, 
                       X, 
                       max_predictions = 20,
@@ -350,16 +341,13 @@ class Seq2SeqRNN(Seq2Seq):
                                  parameters = sum([t.numel() for t in self.parameters()]))
         self.print_architecture()
         
-    def encoder(self, X):
+    def forward(self, X, Y):
         X = self.in_embeddings(X.T)
         encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
-        return encoder_last_hidden.transpose(0, 1)
-    
-    def decoder(self, Y, context):
-        context = context.flatten(start_dim = 1).unsqueeze(1)
-        context = context.repeat((1, Y.shape[1], 1)).transpose(0, 1)
+        encoder_last_hidden = encoder_last_hidden.transpose(0, 1).flatten(start_dim = 1)
+        encoder_last_hidden = encoder_last_hidden.repeat((Y.shape[1], 1, 1))
         Y = self.out_embeddings(Y.T)
-        Y = torch.cat((Y, context), axis = -1)
+        Y = torch.cat((Y, encoder_last_hidden), axis = -1)
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
         output = self.output_layer(decoder.transpose(0, 1))
         return output        
@@ -401,23 +389,18 @@ class Transformer(Seq2Seq):
                                  parameters = sum([t.numel() for t in self.parameters()]))
         self.print_architecture()
         
-    def encoder(self, X):
+    def forward(self, X, Y):
         X = self.in_embeddings(X)
-        X_positional = torch.arange(X.shape[1], device = next(self.parameters()).device).repeat((X.shape[0], 1))
+        X_positional = torch.arange(X.shape[1], device = X.device).repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
         X = (X + X_positional).transpose(0, 1)
-        encoder_output = self.transformer.encoder(X).transpose(0, 1)
-        return encoder_output
-    
-    def decoder(self, Y, context):
-        context = context.transpose(0, 1)
         Y = self.out_embeddings(Y)
-        Y_positional = torch.arange(Y.shape[1], device = next(self.parameters()).device).repeat((Y.shape[0], 1))
+        Y_positional = torch.arange(Y.shape[1], device = Y.device).repeat((Y.shape[0], 1))
         Y_positional = self.positional_embeddings(Y_positional)
         Y = (Y + Y_positional).transpose(0, 1)
-        mask = self.transformer.generate_square_subsequent_mask(Y.shape[0]).to(next(self.parameters()).device)
-        decoder_output = self.transformer.decoder(tgt = Y, 
-                                                  memory = context, 
-                                                  tgt_mask = mask)
-        decoder_output = decoder_output.transpose(0, 1)
-        return self.output_layer(decoder_output)  
+        mask = self.transformer.generate_square_subsequent_mask(Y.shape[0]).to(Y.device)
+        transformer_output = self.transformer.forward(src = X,
+                                                      tgt = Y, 
+                                                      tgt_mask = mask)
+        transformer_output = transformer_output.transpose(0, 1)
+        return self.output_layer(transformer_output)
