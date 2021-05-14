@@ -10,6 +10,7 @@ The two main classes are found in the main folder:
 * **Seq2Seq** in *seq2seq.py* implements the decoding methods for supervised models with a encoder-decoder architecture that learn how to map sequences to sequences. The implementation features a seq2seq unidirectional LSTM model similar to the one in [Cho et al., 2014](https://arxiv.org/abs/1406.1078) as a simple baseline/sanity check and a full Transformer for more advanced tasks.
 
 Both are extensions of **torch.nn.Module**, so they can be extended by writing the **__init__** and **forward** methods as is usual in PyTorch.
+
 In the **examples** folder, you can find several tasks with notebooks that show how to use the classes.
 
 The classes have the following methods:
