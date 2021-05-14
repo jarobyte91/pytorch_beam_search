@@ -52,17 +52,17 @@ class Seq2Seq(nn.Module):
                     X, 
                     max_predictions = 20,
                     beam_width = 5,
-                    candidates = 5,
                     batch_size = 50, 
                     verbose = 0):
         with torch.no_grad():
             Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
             # The next command can be a memory bottleneck, can be controlled with the batch 
             # size of the predict method.
-            next_log_probabilities = self.forward(X, Y)[:, -1, :]
-            log_probabilities, next_chars = next_log_probabilities.squeeze().log_softmax(-1)\
-            .topk(k = candidates, axis = -1)
-            Y = Y.repeat((candidates, 1))
+            next_probabilities = self.forward(X, Y)[:, -1, :]
+            vocabulary_size = next_probabilities.shape[-1]
+            probabilities, next_chars = next_probabilities.squeeze().log_softmax(-1)\
+            .topk(k = beam_width, axis = -1)
+            Y = Y.repeat((beam_width, 1))
             next_chars = next_chars.reshape(-1, 1)
             Y = torch.cat((Y, next_chars), axis = -1)
             # This has to be minus one because we already produced a round
@@ -71,35 +71,25 @@ class Seq2Seq(nn.Module):
             if verbose > 0:
                 predictions_iterator = tqdm(predictions_iterator)
             for i in predictions_iterator:
-                dataset = tud.TensorDataset(X.repeat((candidates, 1, 1)).transpose(0, 1).flatten(end_dim = 1), Y)
+                dataset = tud.TensorDataset(X.repeat((beam_width, 1, 1)).transpose(0, 1).flatten(end_dim = 1), Y)
                 loader = tud.DataLoader(dataset, batch_size = batch_size)
-                next_log_probabilities = []
+                next_probabilities = []
                 iterator = iter(loader)
                 if verbose > 1:
                     iterator = tqdm(iterator)
                 for x, y in iterator:
-                    next_log_probabilities.append(self.forward(x, y)[:, -1, :])
-                next_log_probabilities = torch.cat(next_log_probabilities, axis = 0)
-                best_next_log_probabilities, next_chars = next_log_probabilities.log_softmax(-1)\
-                .topk(k = beam_width, axis = -1)
-                best_next_log_probabilities = best_next_log_probabilities.reshape(X.shape[0], -1)
-                next_chars = next_chars.reshape(-1, 1)
-                Y = torch.cat((Y.repeat((1, beam_width)).reshape(-1, Y.shape[1]), 
-                               next_chars), 
-                              axis = -1)
-                log_probabilities = log_probabilities\
-                                    .repeat(beam_width, 1, 1)\
-                                    .permute(1, 2, 0)\
-                                    .flatten(start_dim = 1)
-                log_probabilities += best_next_log_probabilities
-                log_probabilities, best_candidates = log_probabilities.topk(k = candidates, axis = -1)
-                fix_indices = candidates * beam_width * torch.arange(X.shape[0], 
-                                                                     device = next(self.parameters()).device)\
-                .repeat((candidates, 1)).T.flatten()
-                Y = torch.index_select(input = Y, 
-                                       dim = 0, 
-                                       index = fix_indices + best_candidates.flatten())
-            return Y.reshape(-1, candidates, max_predictions + 1), log_probabilities
+                    next_probabilities.append(self.forward(x, y)[:, -1, :].log_softmax(-1))
+                next_probabilities = torch.cat(next_probabilities, axis = 0)
+                next_probabilities = next_probabilities.reshape((-1, beam_width, next_probabilities.shape[-1]))
+                probabilities = probabilities.unsqueeze(-1) + next_probabilities
+                probabilities = probabilities.flatten(start_dim = 1)
+                probabilities, idx = probabilities.topk(k = beam_width, axis = -1)
+                next_chars = torch.remainder(idx, vocabulary_size).flatten().unsqueeze(-1)
+                best_candidates = (idx / vocabulary_size).long()
+                best_candidates += torch.arange(Y.shape[0] // beam_width, device = X.device).unsqueeze(-1) * beam_width
+                Y = Y[best_candidates].flatten(end_dim = -2)
+                Y = torch.cat((Y, next_chars), axis = 1)
+            return Y.reshape(-1, beam_width, Y.shape[-1]), probabilities
         
     def fit(self, 
             X_train, 
@@ -297,23 +287,23 @@ def load_architecture(path):
         architecture = pickle.load(file)
     name = architecture.pop("model")
     architecture.pop("parameters")
-    if name == "Seq2Seq RNN":
-        model = Seq2SeqRNN(**architecture)
+    if name == "Seq2Seq LSTM":
+        model = LSTM(**architecture)
     elif name == "Transformer":
         model = Transformer(**architecture)
     else:
-        raise Exception(f"Unknown architecture: {architecture['model']}")
+        raise Exception(f"Unknown architecture: {name}")
     return model
         
 class LSTM(Seq2Seq):
     def __init__(self, 
                  in_vocabulary, 
                  out_vocabulary, 
-                 in_embedding_dimension = 8,
-                 out_embedding_dimension = 8,
-                 encoder_hidden_units = 32, 
+                 in_embedding_dimension = 32,
+                 out_embedding_dimension = 32,
+                 encoder_hidden_units = 128, 
                  encoder_layers = 2,
-                 decoder_hidden_units = 32,
+                 decoder_hidden_units = 128,
                  decoder_layers = 2,
                  dropout = 0.0):
         super().__init__()
@@ -328,7 +318,7 @@ class LSTM(Seq2Seq):
                                    num_layers = decoder_layers,
                                    dropout = dropout)
         self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
-        self.architecture = dict(model = "Seq2Seq RNN",
+        self.architecture = dict(model = "Seq2Seq LSTM",
                                  in_vocabulary = in_vocabulary, 
                                  out_vocabulary = out_vocabulary, 
                                  in_embedding_dimension = in_embedding_dimension,
@@ -357,8 +347,8 @@ class Transformer(Seq2Seq):
                  in_vocabulary, 
                  out_vocabulary,
                  max_sequence_length = 32,
-                 embedding_dimension = 8,
-                 feedforward_dimension = 32,
+                 embedding_dimension = 64,
+                 feedforward_dimension = 256,
                  encoder_layers = 2,
                  decoder_layers = 2,
                  attention_heads = 2,

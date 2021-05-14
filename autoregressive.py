@@ -13,11 +13,11 @@ class Autoregressive(nn.Module):
     def greedy_search(self, 
                       X, 
                       max_predictions = 20,
-                      verbose = False):
+                      progress_bar = False):
         with torch.no_grad():
             probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
             iterator = range(max_predictions)
-            if verbose:
+            if progress_bar:
                 iterator = tqdm(iterator)
             for i in iterator:
                 next_probabilities = self.forward(X)[:, -1].log_softmax(-1)
@@ -31,11 +31,11 @@ class Autoregressive(nn.Module):
                X, 
                max_predictions = 20,
                temperature = 1,
-               verbose = False):
+               progress_bar = False):
         with torch.no_grad():
             probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
             iterator = range(max_predictions)
-            if verbose:
+            if progress_bar:
                 iterator = tqdm(iterator)
             for i in iterator:
                 next_probabilities = self.forward(X)[:, -1]
@@ -51,7 +51,7 @@ class Autoregressive(nn.Module):
                     max_predictions = 20,
                     beam_width = 5,
                     batch_size = 100, 
-                    verbose = 0):
+                    progress_bar = 0):
         with torch.no_grad():
             # The next command can be a memory bottleneck, but can be controlled with the batch 
             # size of the predict method.
@@ -65,14 +65,14 @@ class Autoregressive(nn.Module):
             # This has to be minus one because we already produced a round
             # of predictions before the for loop.
             predictions_iterator = range(max_predictions - 1)
-            if verbose > 0:
+            if progress_bar > 0:
                 predictions_iterator = tqdm(predictions_iterator)
             for i in predictions_iterator:
                 dataset = tud.TensorDataset(X)
                 loader = tud.DataLoader(dataset, batch_size = batch_size)
                 next_probabilities = []
                 iterator = iter(loader)
-                if verbose > 1:
+                if progress_bar > 1:
                     iterator = tqdm(iterator)
                 for (x,) in iterator:
                     next_probabilities.append(self.forward(x)[:, -1, :].log_softmax(-1))
@@ -94,7 +94,7 @@ class Autoregressive(nn.Module):
             batch_size = 100, 
             epochs = 5, 
             learning_rate = 0.0001, 
-            verbose = 0, 
+            progress_bar = 0, 
             weight_decay = 0, 
             save_path = None):
         assert X_train.shape[1] > 1
@@ -109,7 +109,7 @@ class Autoregressive(nn.Module):
         performance = []
         start = timer()
         epochs_iterator = range(1, epochs + 1)
-        if verbose > 0:
+        if progress_bar > 0:
             epochs_iterator = tqdm(epochs_iterator)
         header_1 = "Epoch | Train                "
         header_2 = "      | Loss     | Error Rate"
@@ -128,7 +128,7 @@ class Autoregressive(nn.Module):
             errors = []
             sizes = []
             train_iterator = train_loader
-            if verbose > 1:
+            if progress_bar > 1:
                 train_iterator = tqdm(train_iterator)
             for (x, ) in train_iterator:
                 # compute loss and backpropagate
@@ -155,7 +155,7 @@ class Autoregressive(nn.Module):
             if dev:
                 dev_loss, dev_error_rate = self.evaluate(X_dev, 
                                                          batch_size = batch_size, 
-                                                         verbose = verbose > 2, 
+                                                         progress_bar = progress_bar > 2, 
                                                          criterion = criterion)
                 status_string += f" | {dev_loss:>8.4f} | {dev_error_rate:>10.3f}"
                 status.update({"dev_loss": dev_loss, "dev_error_rate": dev_error_rate})
@@ -184,7 +184,7 @@ class Autoregressive(nn.Module):
                 print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
         print()
             
-    def evaluate(self, X, criterion, batch_size = 100, verbose = False):
+    def evaluate(self, X, criterion, batch_size = 100, progress_bar = False):
         dataset = tud.TensorDataset(X)
         loader = tud.DataLoader(dataset, batch_size = batch_size)
         self.eval()
@@ -193,7 +193,7 @@ class Autoregressive(nn.Module):
         sizes = []
         with torch.no_grad():
             iterator = iter(loader)
-            if verbose:
+            if progress_bar:
                 iterator = tqdm(iterator)
             for (x,) in iterator:
                 # compute loss
@@ -216,7 +216,7 @@ class Autoregressive(nn.Module):
                 max_predictions = 20, 
                 method = "beam_search",
                 main_batch_size = 100,
-                main_verbose = False,
+                main_progress_bar = False,
                 **kwargs):
         self.eval()
         dataset = tud.TensorDataset(X.to(next(self.parameters()).device))
@@ -224,7 +224,7 @@ class Autoregressive(nn.Module):
         final_indexes = []
         final_probabilities = []
         iterator = iter(loader)
-        if main_verbose:
+        if main_progress_bar:
             iterator = tqdm(iterator)
         if method == "beam_search":
             for x in iterator:
@@ -276,10 +276,10 @@ def load_architecture(path):
         architecture = pickle.load(file)
     name = architecture.pop("model")
     architecture.pop("parameters")
-    if name == "Seq2Seq RNN":
-        model = Seq2SeqRNN(**architecture)
-    elif name == "Transformer":
-        model = Transformer(**architecture)
+    if name == "Autoregressive LSTM":
+        model = LSTM(**architecture)
+    elif name == "Autoregressive Transformer Encoder":
+        model = TransformerEncoder(**architecture)
     else:
         raise Exception(f"Unknown architecture: {architecture['model']}")
     return model
@@ -288,8 +288,8 @@ class LSTM(Autoregressive):
     def __init__(self, 
                  in_vocabulary,
                  out_vocabulary, 
-                 embedding_dimension = 8,
-                 hidden_units = 64, 
+                 embedding_dimension = 32,
+                 hidden_units = 128, 
                  layers = 2,
                  dropout = 0.0):
         assert len(in_vocabulary) == len(out_vocabulary)
@@ -320,8 +320,8 @@ class TransformerEncoder(Autoregressive):
                  in_vocabulary, 
                  out_vocabulary,
                  max_sequence_length = 32,
-                 embedding_dimension = 32,
-                 feedforward_dimension = 128,
+                 embedding_dimension = 64,
+                 feedforward_dimension = 256,
                  layers = 2,
                  attention_heads = 2,
                  activation = "relu",
