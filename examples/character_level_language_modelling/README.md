@@ -8,7 +8,7 @@ The task is implemented as follows:
   + An unidirectional LSTM that serves as a sanity check for the task.
   + A GPT-like Transformer decoder.
 * Two implementations of the task with Seq2Seq models:
-  + A Seq2Seq model composed of two unidirectional LSTM as in the original Seq2Seq model proposed in (Cho et al., 2014)[https://arxiv.org/abs/1406.1078] that serves as a sanity check for the task.
+  + A Seq2Seq model composed of two unidirectional LSTM as in the original Seq2Seq model proposed in [Cho et al., 2014](https://arxiv.org/abs/1406.1078) that serves as a sanity check for the task.
   + An implementation with a full Transformer.
   
 The folder includes the following:
