@@ -381,6 +381,7 @@ class Transformer(Seq2Seq):
         self.print_architecture()
         
     def forward(self, X, Y):
+        assert X.shape[1] <= self.architecture["max_sequence_length"]
         X = self.in_embeddings(X)
         X_positional = torch.arange(X.shape[1], device = X.device).repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
