@@ -4,4 +4,4 @@ This folder contains several use cases for the library. The idea is to give self
 
 Examples so far:
 
-* Character-level Language modelling - This is the classical NLP task of training a probabilistic sequence model to assign probabilities to strings of characters. The folder has implementations of this task with autoregressive models and Seq2Seq models.
+* **Character-level Language modelling** - This is the classical NLP task of training a probabilistic sequence model to assign probabilities to strings of characters. The folder has implementations of this task with autoregressive models and Seq2Seq models.
