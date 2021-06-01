@@ -8,12 +8,41 @@ from timeit import default_timer as timer
 import pandas as pd
 import re
 import pickle
+import warnings
 
 class Autoregressive(nn.Module):        
+    """
+    A generic autoregressive model. All other autoregressive models should extend this class with
+    a __init__ and forward methods, in the same way as in normal PyTorch.
+    """
     def greedy_search(self, 
                       X, 
                       max_predictions = 20,
-                      progress_bar = False):
+                      progress_bar = True):
+        """
+        Implements Greedy Search to extend the sequences given in X. The method can compute 
+        several outputs in parallel with the first dimension of X.
+
+        Parameters
+        ----------    
+        X: LongTensor of shape (examples, length)
+            The sequences to start the decoding process.
+
+        predictions: int
+            The number of tokens to append to X.
+
+        progress_bar: bool
+            Shows a tqdm progress bar, useful for tracking progress with large tensors.
+
+        Returns
+        -------
+        X: LongTensor of shape (examples, length + predictions)
+            The sequences extended with the decoding process.
+
+        probabilities: FloatTensor of length examples
+            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
+            probability of the next token at every step.
+        """
         with torch.no_grad():
             probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
             iterator = range(max_predictions)
@@ -31,7 +60,34 @@ class Autoregressive(nn.Module):
                X, 
                max_predictions = 20,
                temperature = 1,
-               progress_bar = False):
+               progress_bar = True):
+        """
+        Samples the sequence distribution to extend the sequences given in X. The method can compute 
+        several outputs in parallel with the first dimension of X.
+
+        Parameters
+        ----------    
+        X: LongTensor of shape (examples, length)
+            The sequences to start the decoding process.
+
+        predictions: int
+            The number of tokens to append to X.
+
+        temperature: positive float
+            Parameter to control the freedom of the sampling. Higher values give more freedom.
+
+        progress_bar: bool
+            Shows a tqdm progress bar, useful for tracking progress with large tensors.
+
+        Returns
+        -------
+        X: LongTensor of shape (examples, length + predictions)
+            The sequences extended with the decoding process.
+
+        probabilities: FloatTensor of length examples
+            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
+            probability of the next token at every step.
+        """
         with torch.no_grad():
             probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
             iterator = range(max_predictions)
@@ -51,7 +107,37 @@ class Autoregressive(nn.Module):
                     max_predictions = 20,
                     beam_width = 5,
                     batch_size = 100, 
-                    progress_bar = 0):
+                    progress_bar = 1):
+        """
+        Implements Beam Search to extend the sequences given in X. The method can compute 
+        several outputs in parallel with the first dimension of X.
+
+        Parameters
+        ----------    
+        X: LongTensor of shape (examples, length)
+            The sequences to start the decoding process.
+
+        predictions: int
+            The number of tokens to append to X.
+
+        beam_width: int
+            The number of candidates to keep in the search.
+            
+        batch_size: int
+            The batch size of the inner loop of the method, which relies on the beam width. 
+
+        progress_bar: bool
+            Shows a tqdm progress bar, useful for tracking progress with large tensors.
+
+        Returns
+        -------
+        X: LongTensor of shape (examples, length + predictions)
+            The sequences extended with the decoding process.
+            
+        probabilities: FloatTensor of length examples
+            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
+            probability of the next token at every step.
+        """
         with torch.no_grad():
             # The next command can be a memory bottleneck, but can be controlled with the batch 
             # size of the predict method.
@@ -93,10 +179,53 @@ class Autoregressive(nn.Module):
             X_dev = None,
             batch_size = 100, 
             epochs = 5, 
-            learning_rate = 0.0001, 
-            progress_bar = 0, 
+            learning_rate = 10**-3, 
+            progress_bar = 2, 
             weight_decay = 0, 
             save_path = None):
+        """
+        A generic training method with Adam and Cross Entropy.
+
+        Parameters
+        ----------    
+        X_train: LongTensor of shape (train_examples, train_input_length)
+            The input sequences of the training set.
+            
+        X_dev: LongTensor of shape (dev_examples, dev_input_length), optional
+            The input sequences for the development set.
+
+        batch_size: int
+            The number of examples to process in each batch.
+
+        epochs: int
+            The number of epochs of the training process.
+            
+        learning_rate: float
+            The learning rate to use with Adam in the training process. 
+            
+        weight_decay: float
+            The weight_decay parameter of Adam (L2 penalty), useful for regularizing models. For a deeper 
+            documentation, go to https://pytorch.org/docs/stable/_modules/torch/optim/adam.html#Adam            
+
+        progress_bar: int
+            Shows a tqdm progress bar, useful for tracking progress with large tensors.
+            If equal to 0, no progress bar is shown. 
+            If equal to 1, shows a bar with one step for every epoch.
+            If equal to 2, shows the bar when equal to 1 and also shows a bar with one step per batch for every epoch.
+            If equal to 3, shows the bars when equal to 2 and also shows a bar to track the progress of the evaluation
+            in the development set.
+            
+        save_path: string, optional
+            Path to save the .pt file containing the model parameters when the training ends.
+
+        Returns
+        -------
+        performance: Pandas DataFrame
+            DataFrame with the following columns: epoch, train_loss, train_error_rate, (optionally dev_loss and 
+            dev_error_rate), minutes, learning_rate, weight_decay, model, encoder_embedding_dimension, 
+            decoder_embedding_dimension, encoder_hidden_units, encoder_layers, decoder_hidden_units, decoder_layers, 
+            dropout, parameters and one row for each of the epochs, containing information about the training process.
+        """
         assert X_train.shape[1] > 1
         if X_dev is not None:
             dev = True
@@ -118,9 +247,9 @@ class Autoregressive(nn.Module):
             header_1 += " | Development          "
             header_2 += " | Loss     | Error Rate"
             rule += "-" * 24
-        header_1 += " | Training time"
+        header_1 += " | Minutes"
         header_2 += " |"
-        rule += "-" * 16
+        rule += "-" * 10
         print(header_1, header_2, rule, sep = "\n")
         for e in epochs_iterator:
             self.train()
@@ -147,7 +276,7 @@ class Autoregressive(nn.Module):
                 sizes.append(batch_errors.numel())
             train_loss = sum(losses) / len(losses)
             train_error_rate = 100 * sum(errors) / sum(sizes)
-            t = timer() - start
+            t = (timer() - start) / 60
             status_string = f"{e:>5} | {train_loss:>8.4f} | {train_error_rate:>10.3f}"
             status = {"epoch":e,
                       "train_loss": train_loss,
@@ -159,20 +288,23 @@ class Autoregressive(nn.Module):
                                                          criterion = criterion)
                 status_string += f" | {dev_loss:>8.4f} | {dev_error_rate:>10.3f}"
                 status.update({"dev_loss": dev_loss, "dev_error_rate": dev_error_rate})
-            status.update({"training_time": t,
+            status.update({"minutes": t,
                            "learning_rate": learning_rate,
                            "weight_decay": weight_decay})
             performance.append(status)
             if save_path is not None:  
                 if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"] for p in performance[:-1]])):
                     torch.save(self.state_dict(), save_path)
-            status_string += f" | {t:>13.2f}"
+            status_string += f" | {t:>7.1f}"
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
                           pd.DataFrame([self.architecture for i in performance])), axis = 1)\
                .drop(columns = ["in_vocabulary", "out_vocabulary"])
     
     def print_architecture(self):
+        """
+        Displays the information about the model in standard output. 
+        """
         for k in self.architecture.keys():
             if k == "in_vocabulary":
                 print(f"Tokens in the in vocabulary: {len(self.architecture[k]):,}")
@@ -184,7 +316,42 @@ class Autoregressive(nn.Module):
                 print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
         print()
             
-    def evaluate(self, X, criterion, batch_size = 100, progress_bar = False):
+    def evaluate(self, 
+                 X, 
+                 criterion, 
+                 batch_size = 100, 
+                 progress_bar = True):
+        """
+        Evaluates the model on a dataset.
+        
+        Parameters
+        ----------
+        X: LongTensor of shape (examples, input_length)
+            The input sequences of the dataset.
+            
+        Y: LongTensor of shape (examples, output_length)
+            The output sequences of the dataset.
+            
+        criterion: PyTorch module
+            The loss function to evalue the model on the dataset, has to be able to compare self.forward(X, Y) and Y
+            to produce a real number.
+            
+        batch_size: int
+            The batch size of the evaluation loop.
+            
+        progress_bar: bool
+            Shows a tqdm progress bar, useful for tracking progress with large tensors.
+            
+        Returns
+        -------
+        loss: float
+            The average of criterion across the whole dataset.
+            
+        error_rate: float
+            The step-by-step accuracy of the model across the whole dataset. Useful as a sanity check, as it should
+            go to zero as the loss goes to zero.
+            
+        """
         dataset = tud.TensorDataset(X)
         loader = tud.DataLoader(dataset, batch_size = batch_size)
         self.eval()
@@ -216,8 +383,40 @@ class Autoregressive(nn.Module):
                 max_predictions = 20, 
                 method = "beam_search",
                 main_batch_size = 100,
-                main_progress_bar = False,
+                main_progress_bar = True,
                 **kwargs):
+        """
+        Wrapper unifying the different decoding methods with a data loader, useful for large datasets.
+        
+        Parameters
+        ---------- 
+        X: LongTensor of shape (examples, length)
+            The sequences to start the decoding process. This is the input for the decoding method.
+            
+        predictions: int
+            The number of tokens to append to X.
+            
+        method: string
+            Decoding method to use, can be one of "beam_search", "greedy_search" or "sample".
+            
+        main_batch_size: int
+            Batch size of the dataset loop. The decoding method is applied to every batch.
+            
+        main_progress_bar: bool
+            Shows a progress for the dataset loop, useful to track progress with large datasets.
+            
+        **kwargs
+            Parameters to pass to the decoding method.
+            
+        Returns
+        -------
+        X: LongTensor of shape (examples, length + predictions)
+            The sequences extended with the decoding process.
+            
+        probabilities: FloatTensor of length examples
+            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
+            probability of the next token at every step.
+        """
         self.eval()
         dataset = tud.TensorDataset(X.to(next(self.parameters()).device))
         loader = tud.DataLoader(dataset, batch_size = main_batch_size)
@@ -253,11 +452,42 @@ class Autoregressive(nn.Module):
         final_probabilities = torch.cat(final_probabilities, axis = 0)
         return final_indexes, final_probabilities
     
-    def save_architecture(self, path):
+    def save_architecture(self, 
+                          path):
+        """
+        Saves a dictionary containing all the hyper-parameters to reconstruct it later.
+        
+        Parameters
+        ----------
+            path: string
+                Path to save the dictionary.
+        """
         with open(path, "wb") as file:
             pickle.dump(self.architecture, file)
 
-    def text2tensor(self, strings, vocabulary = None, device = None):
+    def text2tensor(self, 
+                    strings, 
+                    vocabulary = None, 
+                    device = None):
+        """
+        Utility function to convert  a list of strings into a tensor of integers using a mapping vocabulary.
+        
+        Parameters
+        ----------
+        strings: list of strings
+            The strings to convert.
+           
+        vocabulary: dictionary
+            Dictionary containing the index:token pairs to perform the conversion.
+            
+        device: PyTorch device
+            Device to allocate the output in.
+            
+        Returns
+        -------
+        output: LongTensor of shape (len(strings), max([len(s) for s in strings]))
+            Tensor containing the input after conversion.
+        """
         if vocabulary is None:
             vocabulary = self.architecture["in_vocabulary"]
         if device is None:
@@ -266,12 +496,33 @@ class Autoregressive(nn.Module):
                                           for l in strings], 
                                          batch_first = True).to(device)
 
-    def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
+    def tensor2text(self, 
+                    X, 
+                    separator = "", 
+                    vocabulary = None, 
+                    end = "<END>"):
+        """
+        Utility function to convert a tensor of integers into a list of strings using a mapping vocabulary.
+        
+        Parameters
+        ----------
+        X: LongTensor of shape (examples, length)
+            Tensor containing the output of
+        """
         if vocabulary is None:
             vocabulary = self.architecture["out_vocabulary"]
         return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()] 
 
 def load_architecture(path):
+    """
+    Utility function to reconstruct a model from the dictionary containing its architecture, usually 
+    the output of the save_architecture method.
+    
+    Parameters
+    ----------
+    path: string
+        Path containing the architecture dictionary.
+    """
     with open(path, "rb") as file:
         architecture = pickle.load(file)
     name = architecture.pop("model")
@@ -292,6 +543,29 @@ class LSTM(Autoregressive):
                  hidden_units = 128, 
                  layers = 2,
                  dropout = 0.0):
+        """
+        A standard autoregressive model with an LSTM network.
+        
+        Parameters
+        ----------
+        in_vocabulary: dictionary
+            Vocabulary with the index:token pairs for the inputs of the model.
+            
+        out_vocabulary: dictionary
+            Vocabulary with the token:index pairs for the outputs of the model.
+            
+        embedding_dimension: int
+            Dimension of the embeddings to feed into the model.
+            
+        hidden_units: int
+            Hidden units of the model.
+            
+        layers: int
+            Hidden layers of the model.
+            
+        dropout: float between 0.0 and 1.0
+            Dropout rate to apply to whole model.
+        """
         assert len(in_vocabulary) == len(out_vocabulary)
         super().__init__()
         self.embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
@@ -311,6 +585,19 @@ class LSTM(Autoregressive):
         self.print_architecture()
         
     def forward(self, X):
+        """
+        Forward method of the model.
+        
+        Parameters
+        ----------
+        X: LongTensor of shape (batch_size, sequence_length)
+            Tensor of integers containing the inputs for the model.
+            
+        Returns
+        -------
+        output: FloatTensor of shape (batch_size, sequence_length, len(out_vocabulary))
+            Tensor of floats containing the inputs for the final Softmax layer (usually integrated into the loss function).
+        """
         X = self.embeddings(X.T)
         rnn, (rnn_last_hidden, rnn_last_memory) = self.rnn(X)
         return self.output_layer(rnn.transpose(0, 1))
@@ -319,13 +606,46 @@ class TransformerEncoder(Autoregressive):
     def __init__(self, 
                  in_vocabulary, 
                  out_vocabulary,
-                 max_sequence_length = 32,
-                 embedding_dimension = 64,
-                 feedforward_dimension = 256,
+                 max_sequence_length = 16,
+                 embedding_dimension = 32,
+                 feedforward_dimension = 128,
                  layers = 2,
                  attention_heads = 2,
                  activation = "relu",
                  dropout = 0.0):
+        """
+        The standard PyTorch implementation of a Transformer Encoder.
+        
+        Parameters
+        ----------
+        in_vocabulary: dictionary
+            Vocabulary with the index:token pairs for the inputs of the model.
+            
+        out_vocabulary: dictionary
+            Vocabulary with the token:index pairs for the outputs of the model.
+            
+        max_sequence_length: int
+            Maximum sequence length accepted by the model.
+            
+        embedding_dimension: int
+            Dimension of the embeddings of the model.
+            
+        feedforward_dimension: int
+            Dimension of the feedforward network inside the self-attention layers of the model.
+            
+        layers: int
+            Hidden layers of the encoder.
+
+        attention_heads: int
+            Attention heads inside every self-attention layer of the model.
+            
+        activation: string
+            Activation function of the feedforward network inside the self-attention layers of the model. Can
+            be either 'relu' or 'gelu'.
+            
+        dropout: float between 0.0 and 1.0
+            Dropout rate to apply to whole model.
+        """
         super().__init__()
         self.embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
         self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
@@ -350,8 +670,23 @@ class TransformerEncoder(Autoregressive):
                                  parameters = sum([t.numel() for t in self.parameters()]))
         self.print_architecture()
         
-    def forward(self, X):
-        assert X.shape[1] <= self.architecture["max_sequence_length"]
+    def forward(self, X, warn_last_tokens = True):
+        """
+        Forward method of the model.
+        
+        Parameters
+        ----------
+        X: LongTensor of shape (batch_size, sequence_length)
+            Tensor of integers containing the inputs for the model.
+            
+        Returns
+        -------
+        output: FloatTensor of shape (batch_size, sequence_length, len(out_vocabulary))
+            Tensor of floats containing the inputs for the final Softmax layer (usually integrated into the loss function).
+        """
+        if warn_last_tokens and X.shape[1] > self.architecture["max_sequence_length"]:
+            warnings.warn(f"Max sequence length exceded, only using the last {self.architecture['max_sequence_length']} tokens of the input. You can disable this warning with the warn_last_tokens parameter of the forward method.", category = RuntimeWarning)
+        X = X[:, -self.architecture["max_sequence_length"]:]
         X = self.embeddings(X)
         X_positional = torch.arange(X.shape[1], device = X.device).repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
