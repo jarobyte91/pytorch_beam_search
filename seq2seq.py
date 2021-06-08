@@ -309,7 +309,7 @@ class Seq2Seq(nn.Module):
             if save_path is not None:  
                 if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"] for p in performance[:-1]])):
                     torch.save(self.state_dict(), save_path)
-            status_string += f" | {t:>8.1f}"
+            status_string += f" | {t:>7.1f}"
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
                           pd.DataFrame([self.architecture for i in performance])), axis = 1)\
@@ -473,7 +473,7 @@ class Seq2Seq(nn.Module):
     
     def save_architecture(self, path):
         """
-        Saves a dictionary containing all the hyper-parameters to reconstruct it later.
+        Saves a dictionary containing all the hyper-parameters of the model to reconstruct it later.
         
         Parameters
         ----------
