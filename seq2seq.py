@@ -460,9 +460,9 @@ class Seq2Seq(nn.Module):
                 probabilities.append(batch_probabilities)
         elif method == "sample":
             for x in iterator:
-                batch_Y, probabilities = self.sample(X = x[0], 
-                                                     predictions = predictions, 
-                                                     **kwargs)        
+                batch_Y, batch_probabilities = self.sample(X = x[0], 
+                                                           predictions = predictions, 
+                                                           **kwargs)        
                 Y.append(batch_Y)
                 probabilities.append(batch_probabilities)
         else:
@@ -522,7 +522,8 @@ class Seq2Seq(nn.Module):
         """
         if vocabulary is None:
             vocabulary = self.architecture["out_vocabulary"]
-        return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()] 
+        return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l]), flags = re.DOTALL) 
+                for l in X.tolist()] 
 
 def load_architecture(path):
     """
