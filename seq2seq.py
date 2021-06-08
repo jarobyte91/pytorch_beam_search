@@ -546,7 +546,11 @@ def load_architecture(path):
     else:
         raise Exception(f"Unknown architecture: {name}")
     return model
-        
+  
+#######################################################
+# MODELS
+#######################################################
+    
 class LSTM(Seq2Seq):
     def __init__(self, 
                  in_vocabulary, 
@@ -643,7 +647,106 @@ class LSTM(Seq2Seq):
         output = self.output_layer(decoder.transpose(0, 1))
         return output        
     
-class Transformer(Seq2Seq):    
+class ReversingLSTM(Seq2Seq):
+    def __init__(self, 
+                 in_vocabulary, 
+                 out_vocabulary, 
+                 encoder_embedding_dimension = 32,
+                 decoder_embedding_dimension = 32,
+                 encoder_hidden_units = 128, 
+                 encoder_layers = 2,
+                 decoder_hidden_units = 128,
+                 decoder_layers = 2,
+                 dropout = 0.0):
+        """
+        A standard Seq2Seq LSTM model that reverses the order of the input as in 
+        'Sequence to sequence learning with Neural Networks' by Sutskever et al. (2014). 
+        
+        Parameters
+        ----------
+        in_vocabulary: dictionary
+            Vocabulary with the index:token pairs for the inputs of the model.
+            
+        out_vocabulary: dictionary
+            Vocabulary with the token:index pairs for the outputs of the model.
+            
+        encoder_embedding_dimension: int
+            Dimension of the embeddings to feed into the encoder.
+            
+        decoder_embedding_dimension: int
+            Dimension of the embeddings to feed into the decoder.
+            
+        encoder_hidden_units: int
+            Hidden size of the encoder.
+            
+        encoder_layers: int
+            Hidden layers of the encoder.
+            
+        decoder_hidden_units: int
+            Hidden units of the decoder.
+            
+        decoder_layers: int
+            Hidden layers of the decoder.
+            
+        dropout: float between 0.0 and 1.0
+            Dropout rate to apply to whole model.
+        """
+        super().__init__()
+        self.in_embeddings = nn.Embedding(len(in_vocabulary), encoder_embedding_dimension)
+        self.out_embeddings = nn.Embedding(len(out_vocabulary), decoder_embedding_dimension)
+        self.encoder_rnn = nn.LSTM(input_size = encoder_embedding_dimension, 
+                                   hidden_size = encoder_hidden_units, 
+                                   num_layers = encoder_layers,
+                                   dropout = dropout)
+        self.decoder_rnn = nn.LSTM(input_size = decoder_embedding_dimension, 
+                                   hidden_size = decoder_hidden_units, 
+                                   num_layers = decoder_layers,
+                                   dropout = dropout)
+        self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
+        self.enc2dec = nn.Linear(encoder_hidden_units * encoder_layers, decoder_hidden_units * decoder_layers)
+        self.architecture = dict(model = "Seq2Seq Reversing LSTM",
+                                 in_vocabulary = in_vocabulary, 
+                                 out_vocabulary = out_vocabulary, 
+                                 encoder_embedding_dimension = encoder_embedding_dimension,
+                                 decoder_embedding_dimension = decoder_embedding_dimension,
+                                 encoder_hidden_units = encoder_hidden_units, 
+                                 encoder_layers = encoder_layers,
+                                 decoder_hidden_units = decoder_hidden_units,
+                                 decoder_layers = decoder_layers,
+                                 dropout = dropout,
+                                 parameters = sum([t.numel() for t in self.parameters()]))
+        self.print_architecture()
+        
+    def forward(self, X, Y):
+        """
+        Forward method of the model.
+        
+        Parameters
+        ----------
+        X: LongTensor of shape (batch_size, input_length)
+            Tensor of integers containing the inputs for the model.
+            
+        Y: LongTensor of shape (batch_size, output_length)
+            Tensor of integers containing the output produced so far.
+            
+        Returns
+        -------
+        output: FloatTensor of shape (batch_size, output_length, len(out_vocabulary))
+            Tensor of floats containing the inputs for the final Softmax layer (usually integrated into the loss function).
+        """
+        X = self.in_embeddings(torch.flip(X.T, dims = (1, )))
+        encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
+        encoder_last_hidden = encoder_last_hidden.transpose(0, 1).flatten(start_dim = 1)
+        enc2dec = self.enc2dec(encoder_last_hidden)\
+        .reshape(-1, self.decoder_rnn.num_layers, self.decoder_rnn.hidden_size)\
+        .transpose(0, 1)\
+        .contiguous()
+        Y = self.out_embeddings(Y.T)
+        decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y, (enc2dec, torch.zeros_like(enc2dec)))
+        output = self.output_layer(decoder.transpose(0, 1))
+        return output
+    
+class Transformer(Seq2Seq):
     def __init__(self, 
                  in_vocabulary, 
                  out_vocabulary,

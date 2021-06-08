@@ -535,6 +535,10 @@ def load_architecture(path):
         raise Exception(f"Unknown architecture: {architecture['model']}")
     return model
         
+#######################################################
+# MODELS
+#######################################################
+    
 class LSTM(Autoregressive):
     def __init__(self, 
                  in_vocabulary,
