@@ -446,6 +446,7 @@ class Autoregressive(nn.Module):
                                                          max_predictions = max_predictions, 
                                                          **kwargs)        
                 final_indexes.append(indexes)
+                final_probabilities.append(probabilities)
         else:
             raise ValueError("Decoding method not implemented")
         final_indexes = torch.cat(final_indexes, axis = 0)
