@@ -253,6 +253,8 @@ class Seq2Seq(nn.Module):
         epochs_iterator = range(1, epochs + 1)
         if progress_bar > 0:
             epochs_iterator = tqdm(epochs_iterator)
+        print("Training started")
+        print(f"Epochs: {epochs:,}\nLearning rate: {learning_rate}\nWeight decay: {weight_decay}")
         header_1 = "Epoch | Train                "
         header_2 = "      | Loss     | Error Rate"
         rule = "-" * 29
@@ -302,7 +304,7 @@ class Seq2Seq(nn.Module):
                                                          criterion = criterion)
                 status_string += f" | {dev_loss:>8.4f} | {dev_error_rate:>10.3f}"
                 status.update({"dev_loss": dev_loss, "dev_error_rate": dev_error_rate})
-            status.update({"minutes": t,
+            status.update({"training_minutes": t,
                            "learning_rate": learning_rate,
                            "weight_decay": weight_decay})
             performance.append(status)
@@ -507,7 +509,7 @@ class Seq2Seq(nn.Module):
             vocabulary = self.architecture["in_vocabulary"]
         if device is None:
             device = next(self.parameters()).device
-        return nn.utils.rnn.pad_sequence([torch.tensor([vocabulary[c] for c in l]) 
+        return nn.utils.rnn.pad_sequence([torch.tensor([1] + [vocabulary[c] for c in l] + [2]) 
                                           for l in strings], 
                                          batch_first = True).to(device)
 
