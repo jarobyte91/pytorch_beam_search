@@ -503,7 +503,7 @@ class Autoregressive(nn.Module):
             vocabulary = self.voc2i
         if device is None:
             device = next(self.parameters()).device
-        return nn.utils.rnn.pad_sequence([torch.tensor([1] + [vocabulary[c] for c in l] + [2]) 
+        return nn.utils.rnn.pad_sequence([torch.tensor([vocabulary[c] for c in l]) 
                                           for l in strings], 
                                          batch_first = True).to(device)
 
@@ -562,8 +562,8 @@ class LSTM(Autoregressive):
         
         Parameters
         ----------
-        vocabulary: dictionary
-            Vocabulary with the index:token pairs for the inputs of the model.
+        vocabulary: set-like
+            Set-like containing the tokens of the model.
 
         embedding_dimension: int
             Dimension of the embeddings to feed into the model.
