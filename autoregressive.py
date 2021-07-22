@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.utils.data as tud
 from tqdm.notebook import tqdm
 from pprint import pprint
-import numpy as np
 from timeit import default_timer as timer
 import pandas as pd
 import re
@@ -15,6 +14,17 @@ class Autoregressive(nn.Module):
     A generic autoregressive model. All other autoregressive models should extend this class with
     a __init__ and forward methods, in the same way as in normal PyTorch.
     """
+    def __init__(self, vocabulary):
+        super().__init__()
+        self.voc2i = {c:i for i, c in enumerate(sorted(vocabulary), 3)}
+        self.voc2i["<PAD>"] = 0
+        self.voc2i["<START>"] = 1
+        self.voc2i["<END>"] = 2
+        self.i2voc = {i:c for i, c in enumerate(sorted(vocabulary), 3)}
+        self.i2voc[0] = "<PAD>"
+        self.i2voc[1] = "<START>"
+        self.i2voc[2] = "<END>"
+        
     def greedy_search(self, 
                       X, 
                       max_predictions = 20,
@@ -301,17 +311,15 @@ class Autoregressive(nn.Module):
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
                           pd.DataFrame([self.architecture for i in performance])), axis = 1)\
-               .drop(columns = ["in_vocabulary", "out_vocabulary"])
+               .drop(columns = "vocabulary")
     
     def print_architecture(self):
         """
         Displays the information about the model in standard output. 
         """
         for k in self.architecture.keys():
-            if k == "in_vocabulary":
-                print(f"Tokens in the in vocabulary: {len(self.architecture[k]):,}")
-            elif k == "out_vocabulary":
-                print(f"Tokens in the out vocabulary: {len(self.architecture[k]):,}")
+            if k == "vocabulary":
+                print(f"Tokens in the vocabulary: {len(self.architecture[k]):,}")
             elif k == "parameters":
                 print(f"Trainable parameters: {self.architecture[k]:,}")
             else:
@@ -491,7 +499,7 @@ class Autoregressive(nn.Module):
             Tensor containing the input after conversion.
         """
         if vocabulary is None:
-            vocabulary = self.architecture["in_vocabulary"]
+            vocabulary = self.voc2i
         if device is None:
             device = next(self.parameters()).device
         return nn.utils.rnn.pad_sequence([torch.tensor([1] + [vocabulary[c] for c in l] + [2]) 
@@ -512,7 +520,7 @@ class Autoregressive(nn.Module):
             Tensor containing the output of
         """
         if vocabulary is None:
-            vocabulary = self.architecture["out_vocabulary"]
+            vocabulary = self.i2voc
         return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l])) for l in X.tolist()] 
 
 def load_architecture(path):
@@ -543,8 +551,7 @@ def load_architecture(path):
     
 class LSTM(Autoregressive):
     def __init__(self, 
-                 in_vocabulary,
-                 out_vocabulary, 
+                 vocabulary,
                  embedding_dimension = 32,
                  hidden_units = 128, 
                  layers = 2,
@@ -554,12 +561,9 @@ class LSTM(Autoregressive):
         
         Parameters
         ----------
-        in_vocabulary: dictionary
+        vocabulary: dictionary
             Vocabulary with the index:token pairs for the inputs of the model.
-            
-        out_vocabulary: dictionary
-            Vocabulary with the token:index pairs for the outputs of the model.
-            
+
         embedding_dimension: int
             Dimension of the embeddings to feed into the model.
             
@@ -572,17 +576,15 @@ class LSTM(Autoregressive):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        assert len(in_vocabulary) == len(out_vocabulary)
-        super().__init__()
-        self.embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
+        super().__init__(vocabulary)
+        self.embeddings = nn.Embedding(len(self.voc2i), embedding_dimension)
         self.rnn = nn.LSTM(input_size = embedding_dimension, 
                            hidden_size = hidden_units, 
                            num_layers = layers,
                            dropout = dropout)
-        self.output_layer = nn.Linear(hidden_units, len(out_vocabulary))
+        self.output_layer = nn.Linear(hidden_units, len(self.i2voc))
         self.architecture = dict(model = "Autoregressive LSTM",
-                                 in_vocabulary = in_vocabulary,
-                                 out_vocabulary = out_vocabulary,
+                                 vocabulary = vocabulary,
                                  embedding_dimension = embedding_dimension,
                                  hidden_units = hidden_units, 
                                  layers = layers,
