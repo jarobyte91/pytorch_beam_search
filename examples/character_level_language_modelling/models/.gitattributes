@@ -1,4 +1,0 @@
-autoregressive_lstm.arch filter=lfs diff=lfs merge=lfs -text
-autoregressive_transformer.arch filter=lfs diff=lfs merge=lfs -text
-seq2seq_lstm.arch filter=lfs diff=lfs merge=lfs -text
-seq2seq_transformer.arch filter=lfs diff=lfs merge=lfs -text

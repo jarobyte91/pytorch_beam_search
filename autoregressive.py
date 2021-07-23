@@ -189,7 +189,7 @@ class Autoregressive(nn.Module):
             X_dev = None,
             batch_size = 100, 
             epochs = 5, 
-            learning_rate = 10**-3, 
+            learning_rate = 10**-4, 
             progress_bar = 2, 
             weight_decay = 0, 
             save_path = None):
@@ -613,8 +613,7 @@ class LSTM(Autoregressive):
     
 class TransformerEncoder(Autoregressive):    
     def __init__(self, 
-                 in_vocabulary, 
-                 out_vocabulary,
+                 vocabulary, 
                  max_sequence_length = 16,
                  embedding_dimension = 32,
                  feedforward_dimension = 128,
@@ -627,11 +626,8 @@ class TransformerEncoder(Autoregressive):
         
         Parameters
         ----------
-        in_vocabulary: dictionary
-            Vocabulary with the index:token pairs for the inputs of the model.
-            
-        out_vocabulary: dictionary
-            Vocabulary with the token:index pairs for the outputs of the model.
+        vocabulary: set-like
+            Set-like containing the tokens of the model.
             
         max_sequence_length: int
             Maximum sequence length accepted by the model.
@@ -655,8 +651,8 @@ class TransformerEncoder(Autoregressive):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__()
-        self.embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
+        super().__init__(vocabulary)
+        self.embeddings = nn.Embedding(len(self.voc2i), embedding_dimension)
         self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
         self.transformer_layer = nn.TransformerEncoderLayer(d_model = embedding_dimension, 
                                                             dim_feedforward = feedforward_dimension,
@@ -665,10 +661,9 @@ class TransformerEncoder(Autoregressive):
                                                             dropout = dropout)
         self.encoder = nn.TransformerEncoder(encoder_layer = self.transformer_layer,
                                              num_layers = layers)
-        self.output_layer = nn.Linear(embedding_dimension, len(out_vocabulary))
+        self.output_layer = nn.Linear(embedding_dimension, len(self.i2voc))
         self.architecture = dict(model = "Autoregressive Transformer Encoder",
-                                 in_vocabulary = in_vocabulary,
-                                 out_vocabulary = out_vocabulary,
+                                 vocabulary = vocabulary,
                                  max_sequence_length = max_sequence_length,
                                  embedding_dimension = embedding_dimension,
                                  feedforward_dimension = feedforward_dimension,
