@@ -14,7 +14,25 @@ class Seq2Seq(nn.Module):
     A generic sequence-to-sequence model. All other sequence-to-sequence models should extend this class 
     with a __init__ and forward methods, in the same way as in normal PyTorch.
     """
-    
+    def __init__(self, in_vocabulary, out_vocabulary):
+        super().__init__()
+        self.in2i = {c:i for i, c in enumerate(sorted(in_vocabulary), 3)}
+        self.in2i["<PAD>"] = 0
+        self.in2i["<START>"] = 1
+        self.in2i["<END>"] = 2
+        self.i2in = {i:c for i, c in enumerate(sorted(in_vocabulary), 3)}
+        self.i2in[0] = "<PAD>"
+        self.i2in[1] = "<START>"
+        self.i2in[2] = "<END>"
+        self.out2i = {c:i for i, c in enumerate(sorted(out_vocabulary), 3)}
+        self.out2i["<PAD>"] = 0
+        self.out2i["<START>"] = 1
+        self.out2i["<END>"] = 2
+        self.i2out = {i:c for i, c in enumerate(sorted(out_vocabulary), 3)}
+        self.i2out[0] = "<PAD>"
+        self.i2out[1] = "<START>"
+        self.i2out[2] = "<END>"
+        
     def greedy_search(self, 
                       X, 
                       predictions = 20,
@@ -184,7 +202,7 @@ class Seq2Seq(nn.Module):
             Y_dev = None, 
             batch_size = 100, 
             epochs = 5, 
-            learning_rate = 10**-3, 
+            learning_rate = 10**-4, 
             weight_decay = 0, 
             progress_bar = 2, 
             save_path = None):
@@ -506,7 +524,7 @@ class Seq2Seq(nn.Module):
             Tensor containing the input after conversion.
         """
         if vocabulary is None:
-            vocabulary = self.architecture["in_vocabulary"]
+            vocabulary = self.in2i
         if device is None:
             device = next(self.parameters()).device
         return nn.utils.rnn.pad_sequence([torch.tensor([1] + [vocabulary[c] for c in l] + [2]) 
@@ -523,7 +541,7 @@ class Seq2Seq(nn.Module):
             Tensor containing the output of
         """
         if vocabulary is None:
-            vocabulary = self.architecture["out_vocabulary"]
+            vocabulary = self.i2out
         return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l]), flags = re.DOTALL) 
                 for l in X.tolist()] 
 
@@ -597,9 +615,9 @@ class LSTM(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__()
-        self.in_embeddings = nn.Embedding(len(in_vocabulary), encoder_embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(out_vocabulary), decoder_embedding_dimension)
+        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
+        self.in_embeddings = nn.Embedding(len(self.in2i), encoder_embedding_dimension)
+        self.out_embeddings = nn.Embedding(len(self.out2i), decoder_embedding_dimension)
         self.encoder_rnn = nn.LSTM(input_size = encoder_embedding_dimension, 
                                    hidden_size = encoder_hidden_units, 
                                    num_layers = encoder_layers,
@@ -608,7 +626,7 @@ class LSTM(Seq2Seq):
                                    hidden_size = decoder_hidden_units, 
                                    num_layers = decoder_layers,
                                    dropout = dropout)
-        self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
+        self.output_layer = nn.Linear(decoder_hidden_units, len(self.i2out))
         self.architecture = dict(model = "Seq2Seq LSTM",
                                  in_vocabulary = in_vocabulary, 
                                  out_vocabulary = out_vocabulary, 
@@ -693,9 +711,9 @@ class ReversingLSTM(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__()
-        self.in_embeddings = nn.Embedding(len(in_vocabulary), encoder_embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(out_vocabulary), decoder_embedding_dimension)
+        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
+        self.in_embeddings = nn.Embedding(len(self.in2i), encoder_embedding_dimension)
+        self.out_embeddings = nn.Embedding(len(self.out2i), decoder_embedding_dimension)
         self.encoder_rnn = nn.LSTM(input_size = encoder_embedding_dimension, 
                                    hidden_size = encoder_hidden_units, 
                                    num_layers = encoder_layers,
@@ -704,7 +722,7 @@ class ReversingLSTM(Seq2Seq):
                                    hidden_size = decoder_hidden_units, 
                                    num_layers = decoder_layers,
                                    dropout = dropout)
-        self.output_layer = nn.Linear(decoder_hidden_units, len(out_vocabulary))
+        self.output_layer = nn.Linear(decoder_hidden_units, len(self.i2out))
         self.enc2dec = nn.Linear(encoder_hidden_units * encoder_layers, decoder_hidden_units * decoder_layers)
         self.architecture = dict(model = "Seq2Seq Reversing LSTM",
                                  in_vocabulary = in_vocabulary, 
@@ -753,8 +771,8 @@ class Transformer(Seq2Seq):
                  in_vocabulary, 
                  out_vocabulary,
                  max_sequence_length = 32,
-                 embedding_dimension = 16,
-                 feedforward_dimension = 64,
+                 embedding_dimension = 32,
+                 feedforward_dimension = 128,
                  encoder_layers = 2,
                  decoder_layers = 2,
                  attention_heads = 2,
@@ -796,9 +814,9 @@ class Transformer(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__()
-        self.in_embeddings = nn.Embedding(len(in_vocabulary), embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(out_vocabulary), embedding_dimension)
+        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
+        self.in_embeddings = nn.Embedding(len(self.in2i), embedding_dimension)
+        self.out_embeddings = nn.Embedding(len(self.out2i), embedding_dimension)
         self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
         self.transformer = nn.Transformer(d_model = embedding_dimension, 
                                           dim_feedforward = feedforward_dimension,
@@ -807,7 +825,7 @@ class Transformer(Seq2Seq):
                                           num_decoder_layers = decoder_layers,
                                           activation = activation,
                                           dropout = dropout)
-        self.output_layer = nn.Linear(embedding_dimension, len(out_vocabulary))
+        self.output_layer = nn.Linear(embedding_dimension, len(self.i2out))
         self.architecture = dict(model = "Transformer",
                                  in_vocabulary = in_vocabulary,
                                  out_vocabulary = out_vocabulary,

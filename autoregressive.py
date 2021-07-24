@@ -16,14 +16,10 @@ class Autoregressive(nn.Module):
     """
     def __init__(self, vocabulary):
         super().__init__()
-        self.voc2i = {c:i for i, c in enumerate(sorted(vocabulary), 3)}
+        self.voc2i = {c:i for i, c in enumerate(sorted(vocabulary), 1)}
         self.voc2i["<PAD>"] = 0
-        self.voc2i["<START>"] = 1
-        self.voc2i["<END>"] = 2
-        self.i2voc = {i:c for i, c in enumerate(sorted(vocabulary), 3)}
+        self.i2voc = {i:c for i, c in enumerate(sorted(vocabulary), 1)}
         self.i2voc[0] = "<PAD>"
-        self.i2voc[1] = "<START>"
-        self.i2voc[2] = "<END>"
         
     def greedy_search(self, 
                       X, 
