@@ -1,7 +1,3 @@
-# pytorch_decoding
-
-A simple decoding library for PyTorch models
-
 This library implements beam search, greedy search and sampling in a fully vectorized way in PyTorch. This is specially useful for NLP tasks, but can also be used for anything that requires sequence generation from a sequence model.
 
 The two main classes are found in the main folder:
