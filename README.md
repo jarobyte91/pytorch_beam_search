@@ -43,5 +43,5 @@ If you are having issues, please let me know. You can contact me at jarobyte91@g
 
 ## License
 
-The project is licensed under the BSD license.
+The project is licensed under the GPL-3.0 License.
 
