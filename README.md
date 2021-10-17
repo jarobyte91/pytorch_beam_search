@@ -78,8 +78,7 @@ You can find tutorials for some use cases in the **tutorials** folder.
 
 ## Installation
 
-    pip install -r requirements.txt
-    git clone git@github.com:jarobyte91/pytorch_beam_search.git
+    pip install pytorch_beam_search
 
 ## Contribute
 
