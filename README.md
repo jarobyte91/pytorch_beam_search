@@ -25,6 +25,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     # Generate new predictions
     new_examples = ["First", "Second"]
     X_new = vocabulary.text2tensor(new_examples)
+    loss, error_rate = model.evaluate(X_new)    # basic method included, evaluate however you see fit
     predictions, log_probabilities = autoregressive.beam_search(model, X_new) 
     output_text = vocabulary.tensor2text(predictions)
 
@@ -47,8 +48,11 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     model.fit(X, Y)    # basic method included, train however you see fit
     
     # Generate new predictions
-    new_examples = ["first new", "second new"]
-    X_new = in_vocabulary.text2tensor(new_examples)
+    new_source = [list("new first in"), list("new second in")]
+    new_target = [list("new first out"), list("new second out")]
+    X_new = in_vocabulary.text2tensor(new_source)
+    Y_new = out_vocabulary.text2tensor(new_target)
+    loss, error_rate = model.evaluate(X_new, Y_new)    # basic method included, evaluate however you see fit
     predictions, log_probabilities = seq2seq.beam_search(model, X_new) 
     output_text = out_vocabulary.tensor2text(predictions)
     
@@ -74,7 +78,8 @@ You can find tutorials for some use cases in the **tutorials** folder.
 
 ## Installation
 
-    pip install pytorch_beam_search
+    pip install -r requirements.txt
+    git clone git@github.com:jarobyte91/pytorch_beam_search.git
 
 ## Contribute
 
