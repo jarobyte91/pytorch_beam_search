@@ -10,12 +10,14 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     
     # Create vocabulary and examples
     corpus = list("This is a very long string")    # tokenize the way you need
+    # len(corpus) == 26
     vocabulary = autoregressive.Vocabulary(corpus)
     n_gram_size = 17    # 16 with an offset of 1 
     n_grams = [text[i:n_gram_size + i] for i in range(len(text))[:-n_gram_size]]
     
     # Create tensors
     T = vocabulary.text2tensor(n_grams)
+    # T.shape == (n_examples, len_examples) == (26 - 17 + 1 = 10, 17)
     X, Y = T[:, :-1], T[:, 1:]    # examples to predict the next token in a sequence
     
     # Create and train the model
@@ -62,9 +64,9 @@ You can find tutorials for some use cases in the **tutorials** folder.
 
 ### Algorithms
 
-- **greedy_search** implements Greedy Search, which simply picks the most likely token at every step. This is the fastest and simplest algorithm, but can work well if the model is properly trained.
-- **sample** implements sampling from a sequence model, using the learned distribution at every step to build the output token by token. This is very useful to inspect what the model learned.
-- **beam_search** implements Beam Search, a form of pruned Breadth-First Search that expands a fixed number of the best candidates at every step. This is the slowest algorithm, but usually outperforms Greedy Search.
+- The **greedy_search** function implements Greedy Search, which simply picks the most likely token at every step. This is the fastest and simplest algorithm, but can work well if the model is properly trained.
+- The **sample** function implements sampling from a sequence model, using the learned distribution at every step to build the output token by token. This is very useful to inspect what the model learned.
+- The **beam_search** function implements Beam Search, a form of pruned Breadth-First Search that expands a fixed number of the best candidates at every step. This is the slowest algorithm, but usually outperforms Greedy Search.
 
 ### Models
 
