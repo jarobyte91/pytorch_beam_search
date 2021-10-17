@@ -21,13 +21,13 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     X, Y = T[:, :-1], T[:, 1:]    # examples to predict the next token in a sequence
     
     # Create and train the model
-    model = autoregressive.TransformerEncoder(vocabulary)    # just a standard PyTorch sequence model
-    model.fit(X, Y)    # basic method included, train however you see fit
+    model = autoregressive.TransformerEncoder(vocabulary)    # just a PyTorch model
+    model.fit(X, Y)    # basic method included
     
     # Generate new predictions
     new_examples = ["First", "Second"]
     X_new = vocabulary.text2tensor(new_examples)
-    loss, error_rate = model.evaluate(X_new)    # basic method included, evaluate however you see fit
+    loss, error_rate = model.evaluate(X_new)    # basic method included
     predictions, log_probabilities = autoregressive.beam_search(model, X_new) 
     output_text = vocabulary.tensor2text(predictions)
 
@@ -46,15 +46,15 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     Y = out_vocabulary.text2tensor(target)
     
     # Create and train the model
-    model = seq2seq.Transformer(in_vocabulary, out_vocabulary)    # just a standard PyTorch sequence model
-    model.fit(X, Y)    # basic method included, train however you see fit
+    model = seq2seq.Transformer(in_vocabulary, out_vocabulary)    # just a PyTorch model
+    model.fit(X, Y)    # basic method included
     
     # Generate new predictions
     new_source = [list("new first in"), list("new second in")]
     new_target = [list("new first out"), list("new second out")]
     X_new = in_vocabulary.text2tensor(new_source)
     Y_new = out_vocabulary.text2tensor(new_target)
-    loss, error_rate = model.evaluate(X_new, Y_new)    # basic method included, evaluate however you see fit
+    loss, error_rate = model.evaluate(X_new, Y_new)    # basic method included
     predictions, log_probabilities = seq2seq.beam_search(model, X_new) 
     output_text = out_vocabulary.tensor2text(predictions)
     
