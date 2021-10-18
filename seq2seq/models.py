@@ -1,199 +1,24 @@
 import torch
 import torch.nn as nn
 import torch.utils.data as tud
-from tqdm.notebook import tqdm
-from pprint import pprint
-import numpy as np
 from timeit import default_timer as timer
+from tqdm.notebook import tqdm
 import pandas as pd
-import re
-import pickle
+import warnings
 
 class Seq2Seq(nn.Module): 
     """
     A generic sequence-to-sequence model. All other sequence-to-sequence models should extend this class 
     with a __init__ and forward methods, in the same way as in normal PyTorch.
     """
-    def __init__(self, in_vocabulary, out_vocabulary):
-        super().__init__()
-        self.in2i = {c:i for i, c in enumerate(sorted(in_vocabulary), 3)}
-        self.in2i["<PAD>"] = 0
-        self.in2i["<START>"] = 1
-        self.in2i["<END>"] = 2
-        self.i2in = {i:c for i, c in enumerate(sorted(in_vocabulary), 3)}
-        self.i2in[0] = "<PAD>"
-        self.i2in[1] = "<START>"
-        self.i2in[2] = "<END>"
-        self.out2i = {c:i for i, c in enumerate(sorted(out_vocabulary), 3)}
-        self.out2i["<PAD>"] = 0
-        self.out2i["<START>"] = 1
-        self.out2i["<END>"] = 2
-        self.i2out = {i:c for i, c in enumerate(sorted(out_vocabulary), 3)}
-        self.i2out[0] = "<PAD>"
-        self.i2out[1] = "<START>"
-        self.i2out[2] = "<END>"
-        
-    def greedy_search(self, 
-                      X, 
-                      predictions = 20,
-                      progress_bar = True):
+    def print_architecture(self):
         """
-        Implements Greedy Search to compute the output with the sequences given in X. The method can compute 
-        several outputs in parallel with the first dimension of X.
-
-        Parameters
-        ----------    
-        X: LongTensor of shape (examples, length)
-            The sequences to start the decoding process.
-
-        predictions: int
-            The number of tokens to append to X.
-
-        progress_bar: bool
-            Shows a tqdm progress bar, useful for tracking progress with large tensors.
-
-        Returns
-        -------
-        Y: LongTensor of shape (examples, length + predictions)
-            The output sequences.
-
-        probabilities: FloatTensor of length examples
-            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
-            probability of the next token at every step.
+        Displays the information about the model in standard output. 
         """
-        with torch.no_grad():
-            Y = torch.ones(X.shape[0], 1).long().to(next(self.parameters()).device)
-            probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
-            iterator = range(predictions)
-            if progress_bar:
-                iterator = tqdm(iterator)
-            for i in iterator:
-                next_probabilities = self.forward(X, Y)[:, -1].log_softmax(-1)
-                max_next_probabilities, next_chars = next_probabilities.max(-1)
-                next_chars = next_chars.unsqueeze(-1)
-                Y = torch.cat((Y, next_chars), axis = 1)
-                probabilities += max_next_probabilities
-        return Y, probabilities
-
-    def sample(self, 
-               X, 
-               predictions = 20,
-               temperature = 1.0,
-               progress_bar = True):
-        """
-        Samples the sequence distribution to compute the output with the sequences given in X. The method can compute 
-        several outputs in parallel with the first dimension of X.
-
-        Parameters
-        ----------    
-        X: LongTensor of shape (examples, length)
-            The sequences to start the decoding process.
-
-        predictions: int
-            The number of tokens to append to X.
-
-        temperature: positive float
-            Parameter to control the freedom of the sampling. Higher values give more freedom.
-
-        progress_bar: bool
-            Shows a tqdm progress bar, useful for tracking progress with large tensors.
-
-        Returns
-        -------
-        Y: LongTensor of shape (examples, length + predictions)
-            The output sequences.
-
-        probabilities: FloatTensor of length examples
-            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
-            probability of the next token at every step.
-        """
-        with torch.no_grad():
-            Y = torch.ones(X.shape[0], 1).long().to(next(self.parameters()).device)
-            probabilities = torch.zeros(X.shape[0]).to(next(self.parameters()).device)
-            iterator = range(predictions)
-            if progress_bar:
-                iterator = tqdm(iterator)
-            for i in iterator:
-                next_probabilities = self.forward(X, Y)[:, -1]
-                next_probabilities = (next_probabilities / temperature).softmax(1)
-                random = torch.rand((next_probabilities.shape[0], 1)).to(next(self.parameters()).device)
-                next_chars = ((next_probabilities.cumsum(1) < random).sum(1, keepdims = True))
-                probabilities += torch.gather(input = next_probabilities.log(), dim = 1, index = next_chars).squeeze()
-                Y = torch.cat((Y, next_chars), axis = 1)
-            return Y, probabilities
-
-    def beam_search(self, 
-                    X, 
-                    predictions = 20,
-                    beam_width = 5,
-                    batch_size = 50, 
-                    progress_bar = 1):
-        """
-        Implements Beam Search to compute the output with the sequences given in X. The method can compute 
-        several outputs in parallel with the first dimension of X.
-
-        Parameters
-        ----------    
-        X: LongTensor of shape (examples, length)
-            The sequences to start the decoding process.
-
-        predictions: int
-            The number of tokens to append to X.
-
-        beam_width: int
-            The number of candidates to keep in the search.
-            
-        batch_size: int
-            The batch size of the inner loop of the method, which relies on the beam width. 
-
-        progress_bar: bool
-            Shows a tqdm progress bar, useful for tracking progress with large tensors.
-
-        Returns
-        -------
-        Y: LongTensor of shape (examples, length + predictions)
-            The output sequences.
-            
-        probabilities: FloatTensor of length examples
-            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
-            probability of the next token at every step.
-        """
-        with torch.no_grad():
-            Y = torch.ones(X.shape[0], 1).to(next(self.parameters()).device).long()
-            # The next command can be a memory bottleneck, can be controlled with the batch 
-            # size of the predict method.
-            next_probabilities = self.forward(X, Y)[:, -1, :]
-            vocabulary_size = next_probabilities.shape[-1]
-            probabilities, next_chars = next_probabilities.squeeze().log_softmax(-1)\
-            .topk(k = beam_width, axis = -1)
-            Y = Y.repeat((beam_width, 1))
-            next_chars = next_chars.reshape(-1, 1)
-            Y = torch.cat((Y, next_chars), axis = -1)
-            # This has to be minus one because we already produced a round
-            # of predictions before the for loop.
-            predictions_iterator = range(predictions - 1)
-            if progress_bar > 0:
-                predictions_iterator = tqdm(predictions_iterator)
-            for i in predictions_iterator:
-                dataset = tud.TensorDataset(X.repeat((beam_width, 1, 1)).transpose(0, 1).flatten(end_dim = 1), Y)
-                loader = tud.DataLoader(dataset, batch_size = batch_size)
-                next_probabilities = []
-                iterator = iter(loader)
-                if progress_bar > 1:
-                    iterator = tqdm(iterator)
-                for x, y in iterator:
-                    next_probabilities.append(self.forward(x, y)[:, -1, :].log_softmax(-1))
-                next_probabilities = torch.cat(next_probabilities, axis = 0)
-                next_probabilities = next_probabilities.reshape((-1, beam_width, next_probabilities.shape[-1]))
-                probabilities = probabilities.unsqueeze(-1) + next_probabilities
-                probabilities = probabilities.flatten(start_dim = 1)
-                probabilities, idx = probabilities.topk(k = beam_width, axis = -1)
-                next_chars = torch.remainder(idx, vocabulary_size).flatten().unsqueeze(-1)
-                best_candidates = (idx / vocabulary_size).long()
-                best_candidates += torch.arange(Y.shape[0] // beam_width, device = X.device).unsqueeze(-1) * beam_width
-                Y = Y[best_candidates].flatten(end_dim = -2)
-                Y = torch.cat((Y, next_chars), axis = 1)
-            return Y.reshape(-1, beam_width, Y.shape[-1]), probabilities
+        for k in self.architecture.keys():
+            print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
+        print(f"Trainable parameters: {sum([p.numel() for p in self.parameters()]):,}")
+        print()
         
     def fit(self, 
             X_train, 
@@ -272,6 +97,11 @@ class Seq2Seq(nn.Module):
         if progress_bar > 0:
             epochs_iterator = tqdm(epochs_iterator)
         print("Training started")
+        print("X_train.shape:", X_train.shape)
+        print("Y_train.shape:", Y_train.shape)
+        if dev:
+            print("X_dev.shape:", X_dev.shape)
+            print("Y_dev.shape:", Y_dev.shape)
         print(f"Epochs: {epochs:,}\nLearning rate: {learning_rate}\nWeight decay: {weight_decay}")
         header_1 = "Epoch | Train                "
         header_2 = "      | Loss     | Error Rate"
@@ -333,28 +163,14 @@ class Seq2Seq(nn.Module):
             print(status_string)
         return pd.concat((pd.DataFrame(performance), 
                           pd.DataFrame([self.architecture for i in performance])), axis = 1)\
-               .drop(columns = ["in_vocabulary", "out_vocabulary"])
+               .drop(columns = ["source_index", "target_index"])
     
-    def print_architecture(self):
-        """
-        Displays the information about the model in standard output. 
-        """
-        for k in self.architecture.keys():
-            if k == "in_vocabulary":
-                print(f"Tokens in the input vocabulary: {len(self.architecture[k]):,}")
-            elif k == "out_vocabulary":
-                print(f"Tokens in the output vocabulary: {len(self.architecture[k]):,}")
-            elif k == "parameters":
-                print(f"Trainable parameters: {self.architecture[k]:,}")
-            else:
-                print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
-        print()
             
     def evaluate(self, 
                  X, 
                  Y, 
-                 criterion, 
-                 batch_size = 100, 
+                 criterion = nn.CrossEntropyLoss(), 
+                 batch_size = 128, 
                  progress_bar = True):
         """
         Evaluates the model on a dataset.
@@ -412,169 +228,12 @@ class Seq2Seq(nn.Module):
                 sizes.append(batch_errors.numel())
             loss = sum(losses) / len(losses)
             error_rate = 100 * sum(errors) / sum(sizes)
-        return loss, error_rate   
-    
-    def predict(self, 
-                X, 
-                predictions = None, 
-                method = "beam_search",
-                main_batch_size = 100,
-                main_progress_bar = True,
-                **kwargs):
-        """
-        Wrapper unifying the different decoding methods with a data loader, useful for large datasets.
-        
-        Parameters
-        ---------- 
-        X: LongTensor of shape (examples, length)
-            The sequences to start the decoding process. This is the input for the decoding method.
-            
-        predictions: int
-            The number of tokens to append to X.
-            
-        method: string
-            Decoding method to use, can be one of "beam_search", "greedy_search" or "sample".
-            
-        main_batch_size: int
-            Batch size of the dataset loop. The decoding method is applied to every batch.
-            
-        main_progress_bar: bool
-            Shows a progress for the dataset loop, useful to track progress with large datasets.
-            
-        **kwargs
-            Parameters to pass to the decoding method.
-            
-        Returns
-        -------
-        Y: LongTensor of shape (examples, length + predictions)
-            The output sequences.
-            
-        probabilities: FloatTensor of length examples
-            The estimated log-probabilities for the output sequences. They are computed by iteratively adding the 
-            probability of the next token at every step.
-        """
-        if predictions is None:
-            predictions = X.shape[1]
-        self.eval()
-        dataset = tud.TensorDataset(X.to(next(self.parameters()).device))
-        loader = tud.DataLoader(dataset, batch_size = main_batch_size)
-        Y = []
-        probabilities = []
-        iterator = iter(loader)
-        if main_progress_bar:
-            iterator = tqdm(iterator)
-        if method == "beam_search":
-            for x in iterator:
-                batch_Y, batch_probabilities = self.beam_search(X = x[0], 
-                                                                predictions = predictions, 
-                                                                **kwargs)
-                # In this case, we only return the best candidate for each example
-                Y.append(batch_Y[:, 0, :])
-                probabilities.append(batch_probabilities)
-        elif method == "greedy_search":
-            for x in iterator:
-                batch_Y, batch_probabilities = self.greedy_search(X = x[0], 
-                                                                  predictions = predictions, 
-                                                                  **kwargs)
-                Y.append(batch_Y)
-                probabilities.append(batch_probabilities)
-        elif method == "sample":
-            for x in iterator:
-                batch_Y, batch_probabilities = self.sample(X = x[0], 
-                                                           predictions = predictions, 
-                                                           **kwargs)        
-                Y.append(batch_Y)
-                probabilities.append(batch_probabilities)
-        else:
-            raise ValueError("Decoding method not implemented")
-        Y = torch.cat(Y, axis = 0)
-        probabilities = torch.cat(probabilities, axis = 0)
-        return Y, probabilities
-    
-    def save_architecture(self, path):
-        """
-        Saves a dictionary containing all the hyper-parameters of the model to reconstruct it later.
-        
-        Parameters
-        ----------
-            path: string
-                Path to save the dictionary.
-        """
-        with open(path, "wb") as file:
-            pickle.dump(self.architecture, file)
-
-    def text2tensor(self, strings, vocabulary = None, device = None):
-        """
-        Utility function to convert  a list of strings into a tensor of integers using a mapping vocabulary.
-        
-        Parameters
-        ----------
-        strings: list of strings
-            The strings to convert.
-           
-        vocabulary: dictionary
-            Dictionary containing the index:token pairs to perform the conversion.
-            
-        device: PyTorch device
-            Device to allocate the output in.
-            
-        Returns
-        -------
-        output: LongTensor of shape (len(strings), max([len(s) for s in strings]))
-            Tensor containing the input after conversion.
-        """
-        if vocabulary is None:
-            vocabulary = self.in2i
-        if device is None:
-            device = next(self.parameters()).device
-        return nn.utils.rnn.pad_sequence([torch.tensor([1] + [vocabulary[c] for c in l] + [2]) 
-                                          for l in strings], 
-                                         batch_first = True).to(device)
-
-    def tensor2text(self, X, separator = "", vocabulary = None, end = "<END>"):
-        """
-        Utility function to convert a tensor of integers into a list of strings using a mapping vocabulary.
-        
-        Parameters
-        ----------
-        X: LongTensor of shape (examples, length)
-            Tensor containing the output of
-        """
-        if vocabulary is None:
-            vocabulary = self.i2out
-        return [re.sub(end + ".*", end, separator.join([vocabulary[i] for i in l]), flags = re.DOTALL) 
-                for l in X.tolist()] 
-
-def load_architecture(path):
-    """
-    Utility function to reconstruct a model from the dictionary containing its architecture, usually 
-    the output of the save_architecture method.
-    
-    Parameters
-    ----------
-    path: string
-        Path containing the architecture dictionary.
-    """
-    with open(path, "rb") as file:
-        architecture = pickle.load(file)
-    name = architecture.pop("model")
-    architecture.pop("parameters")
-    if name == "Seq2Seq LSTM":
-        model = LSTM(**architecture)
-    elif name == "Transformer":
-        model = Transformer(**architecture)
-    else:
-        raise Exception(f"Unknown architecture: {name}")
-    return model
-  
-#######################################################
-# MODELS
-#######################################################
+        return loss, error_rate 
     
 class LSTM(Seq2Seq):
     def __init__(self, 
-                 in_vocabulary, 
-                 out_vocabulary, 
+                 source_index, 
+                 target_index, 
                  encoder_embedding_dimension = 32,
                  decoder_embedding_dimension = 32,
                  encoder_hidden_units = 128, 
@@ -615,9 +274,11 @@ class LSTM(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
-        self.in_embeddings = nn.Embedding(len(self.in2i), encoder_embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(self.out2i), decoder_embedding_dimension)
+        self.source_index = source_index
+        self.target_index = target_index
+        super().__init__()
+        self.source_embeddings = nn.Embedding(len(source_index), encoder_embedding_dimension)
+        self.target_embeddings = nn.Embedding(len(target_index), decoder_embedding_dimension)
         self.encoder_rnn = nn.LSTM(input_size = encoder_embedding_dimension, 
                                    hidden_size = encoder_hidden_units, 
                                    num_layers = encoder_layers,
@@ -626,18 +287,17 @@ class LSTM(Seq2Seq):
                                    hidden_size = decoder_hidden_units, 
                                    num_layers = decoder_layers,
                                    dropout = dropout)
-        self.output_layer = nn.Linear(decoder_hidden_units, len(self.i2out))
+        self.output_layer = nn.Linear(decoder_hidden_units, len(target_index))
         self.architecture = dict(model = "Seq2Seq LSTM",
-                                 in_vocabulary = in_vocabulary, 
-                                 out_vocabulary = out_vocabulary, 
+                                 source_index = source_index, 
+                                 target_index = target_index, 
                                  encoder_embedding_dimension = encoder_embedding_dimension,
                                  decoder_embedding_dimension = decoder_embedding_dimension,
                                  encoder_hidden_units = encoder_hidden_units, 
                                  encoder_layers = encoder_layers,
                                  decoder_hidden_units = decoder_hidden_units,
                                  decoder_layers = decoder_layers,
-                                 dropout = dropout,
-                                 parameters = sum([t.numel() for t in self.parameters()]))
+                                 dropout = dropout)
         self.print_architecture()
         
     def forward(self, X, Y):
@@ -657,20 +317,21 @@ class LSTM(Seq2Seq):
         output: FloatTensor of shape (batch_size, output_length, len(out_vocabulary))
             Tensor of floats containing the inputs for the final Softmax layer (usually integrated into the loss function).
         """
-        X = self.in_embeddings(X.T)
+        X = self.source_embeddings(X.T)
         encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
         encoder_last_hidden = encoder_last_hidden.transpose(0, 1).flatten(start_dim = 1)
         encoder_last_hidden = encoder_last_hidden.repeat((Y.shape[1], 1, 1))
-        Y = self.out_embeddings(Y.T)
+        Y = self.target_embeddings(Y.T)
         Y = torch.cat((Y, encoder_last_hidden), axis = -1)
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y)
         output = self.output_layer(decoder.transpose(0, 1))
         return output        
     
+    
 class ReversingLSTM(Seq2Seq):
     def __init__(self, 
-                 in_vocabulary, 
-                 out_vocabulary, 
+                 source_index, 
+                 target_index, 
                  encoder_embedding_dimension = 32,
                  decoder_embedding_dimension = 32,
                  encoder_hidden_units = 128, 
@@ -711,9 +372,11 @@ class ReversingLSTM(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
-        self.in_embeddings = nn.Embedding(len(self.in2i), encoder_embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(self.out2i), decoder_embedding_dimension)
+        super().__init__()
+        self.source_index = source_index
+        self.target_index = target_index
+        self.source_embeddings = nn.Embedding(len(source_index), encoder_embedding_dimension)
+        self.target_embeddings = nn.Embedding(len(target_index), decoder_embedding_dimension)
         self.encoder_rnn = nn.LSTM(input_size = encoder_embedding_dimension, 
                                    hidden_size = encoder_hidden_units, 
                                    num_layers = encoder_layers,
@@ -722,19 +385,18 @@ class ReversingLSTM(Seq2Seq):
                                    hidden_size = decoder_hidden_units, 
                                    num_layers = decoder_layers,
                                    dropout = dropout)
-        self.output_layer = nn.Linear(decoder_hidden_units, len(self.i2out))
+        self.output_layer = nn.Linear(decoder_hidden_units, len(target_index))
         self.enc2dec = nn.Linear(encoder_hidden_units * encoder_layers, decoder_hidden_units * decoder_layers)
         self.architecture = dict(model = "Seq2Seq Reversing LSTM",
-                                 in_vocabulary = in_vocabulary, 
-                                 out_vocabulary = out_vocabulary, 
+                                 source_index = source_index, 
+                                 target_index = target_index, 
                                  encoder_embedding_dimension = encoder_embedding_dimension,
                                  decoder_embedding_dimension = decoder_embedding_dimension,
                                  encoder_hidden_units = encoder_hidden_units, 
                                  encoder_layers = encoder_layers,
                                  decoder_hidden_units = decoder_hidden_units,
                                  decoder_layers = decoder_layers,
-                                 dropout = dropout,
-                                 parameters = sum([t.numel() for t in self.parameters()]))
+                                 dropout = dropout)
         self.print_architecture()
         
     def forward(self, X, Y):
@@ -754,22 +416,23 @@ class ReversingLSTM(Seq2Seq):
         output: FloatTensor of shape (batch_size, output_length, len(out_vocabulary))
             Tensor of floats containing the inputs for the final Softmax layer (usually integrated into the loss function).
         """
-        X = self.in_embeddings(torch.flip(X.T, dims = (1, )))
+        X = self.source_embeddings(torch.flip(X.T, dims = (1, )))
         encoder, (encoder_last_hidden, encoder_last_memory) = self.encoder_rnn(X)
         encoder_last_hidden = encoder_last_hidden.transpose(0, 1).flatten(start_dim = 1)
         enc2dec = self.enc2dec(encoder_last_hidden)\
         .reshape(-1, self.decoder_rnn.num_layers, self.decoder_rnn.hidden_size)\
         .transpose(0, 1)\
         .contiguous()
-        Y = self.out_embeddings(Y.T)
+        Y = self.target_embeddings(Y.T)
         decoder, (decoder_last_hidden, decoder_last_memory) = self.decoder_rnn(Y, (enc2dec, torch.zeros_like(enc2dec)))
         output = self.output_layer(decoder.transpose(0, 1))
         return output
     
+    
 class Transformer(Seq2Seq):
     def __init__(self, 
-                 in_vocabulary, 
-                 out_vocabulary,
+                 source_index, 
+                 target_index,
                  max_sequence_length = 32,
                  embedding_dimension = 32,
                  feedforward_dimension = 128,
@@ -814,9 +477,11 @@ class Transformer(Seq2Seq):
         dropout: float between 0.0 and 1.0
             Dropout rate to apply to whole model.
         """
-        super().__init__(in_vocabulary = in_vocabulary, out_vocabulary = out_vocabulary)
-        self.in_embeddings = nn.Embedding(len(self.in2i), embedding_dimension)
-        self.out_embeddings = nn.Embedding(len(self.out2i), embedding_dimension)
+        super().__init__()
+        self.source_index = source_index
+        self.target_index = target_index
+        self.source_embeddings = nn.Embedding(len(source_index), embedding_dimension)
+        self.target_embeddings = nn.Embedding(len(target_index), embedding_dimension)
         self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
         self.transformer = nn.Transformer(d_model = embedding_dimension, 
                                           dim_feedforward = feedforward_dimension,
@@ -825,10 +490,10 @@ class Transformer(Seq2Seq):
                                           num_decoder_layers = decoder_layers,
                                           activation = activation,
                                           dropout = dropout)
-        self.output_layer = nn.Linear(embedding_dimension, len(self.i2out))
-        self.architecture = dict(model = "Transformer",
-                                 in_vocabulary = in_vocabulary,
-                                 out_vocabulary = out_vocabulary,
+        self.output_layer = nn.Linear(embedding_dimension, len(target_index))
+        self.architecture = dict(model = "Seq2Seq Transformer",
+                                 source_index = source_index,
+                                 target_index = target_index,
                                  max_sequence_length = max_sequence_length,
                                  embedding_dimension = embedding_dimension,
                                  feedforward_dimension = feedforward_dimension,
@@ -836,8 +501,7 @@ class Transformer(Seq2Seq):
                                  decoder_layers = decoder_layers,
                                  attention_heads = attention_heads,
                                  activation = activation,
-                                 dropout = dropout,
-                                 parameters = sum([t.numel() for t in self.parameters()]))
+                                 dropout = dropout)
         self.print_architecture()
         
     def forward(self, X, Y):
@@ -859,11 +523,11 @@ class Transformer(Seq2Seq):
         """
         assert X.shape[1] <= self.architecture["max_sequence_length"]
         assert Y.shape[1] <= self.architecture["max_sequence_length"]
-        X = self.in_embeddings(X)
+        X = self.source_embeddings(X)
         X_positional = torch.arange(X.shape[1], device = X.device).repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
         X = (X + X_positional).transpose(0, 1)
-        Y = self.out_embeddings(Y)
+        Y = self.target_embeddings(Y)
         Y_positional = torch.arange(Y.shape[1], device = Y.device).repeat((Y.shape[0], 1))
         Y_positional = self.positional_embeddings(Y_positional)
         Y = (Y + Y_positional).transpose(0, 1)

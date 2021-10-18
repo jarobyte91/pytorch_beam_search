@@ -12,10 +12,7 @@ class Autoregressive(nn.Module):
         Displays the information about the model in standard output. 
         """
         for k in self.architecture.keys():
-            if k == "index":
-                print(f"Tokens in the vocabulary: {len(self.architecture[k]):,}")
-            else:
-                print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
+            print(f"{k.replace('_', ' ').capitalize()}: {self.architecture[k]}")
         print(f"Trainable parameters: {sum([p.numel() for p in self.parameters()]):,}")
         print()
         

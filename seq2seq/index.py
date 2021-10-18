@@ -6,17 +6,17 @@ import re
 
 class Index():
     def __init__(self, corpus):
-        self.special_tokens = ["<PAD>"]
-        self.vocabulary = lm.Vocabulary(corpus)
+        self.special_tokens = ["<PAD>", "<START>", "<END>"]
+        self.vocabulary = lm.Vocabulary(sum(corpus, start = []))
         tokens = self.special_tokens + list(sorted(self.vocabulary))
         self.voc2idx = {c:i for i, c in enumerate(tokens)}
         self.idx2voc = {i:c for i, c in enumerate(tokens)}
-
+        
     def __len__(self):
         return len(self.voc2idx)
     
     def __str__(self):
-        return f"<Autoregressive Index with {len(self):,} items>"
+        return f"<Seq2Seq Index with {len(self):,} items>"
         
     def text2tensor(self, 
                     strings, 
@@ -28,7 +28,8 @@ class Index():
         m = max([len(s) for s in strings])
         idx = []
         for l in iterator:
-            idx.append([0 for i in range(m - len(l))] + [self.voc2idx[self.vocabulary.lookup(c)] for c in l])
+            idx.append([1] + [self.voc2idx[self.vocabulary.lookup(c)] for c in l] + [2] + 
+                       [0 for i in range(m - len(l))])
         return torch.tensor(idx)
 
     def tensor2text(self, 
