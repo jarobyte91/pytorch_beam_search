@@ -62,8 +62,6 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     output = [target_index.tensor2text(p) for p in predictions]
     output
     
-You can find tutorials for some use cases in the **tutorials** folder.
-
 ## Features
 
 ### Algorithms
