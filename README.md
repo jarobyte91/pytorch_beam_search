@@ -73,12 +73,12 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
 ### Models
 
 - The **autoregressive** module implements the search algorithms and some architectures for unsupervised models that learn to predict the next token in a sequence.
-  - LSTM is a simple baseline/sanity check.
-  - TransformerEncoder is a [GPT](https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf)-like model for state-of-the-art performance.
+  - **LSTM** is a simple baseline/sanity check.
+  - **TransformerEncoder** is a [GPT](https://s3-us-west-2.amazonaws.com/openai-assets/research-covers/language-unsupervised/language_understanding_paper.pdf)-like model for state-of-the-art performance.
 - The **seq2seq** module implements the search algorithms and some architectures for supervised encoder-decoder models that learn how to map sequences to sequences.  
-  - LSTM is a sequence-to-sequence unidirectional LSTM model similar to the one in [Cho et al., 2014](https://arxiv.org/abs/1406.1078), useful as a simple baseline/sanity check.
-  - ReversingLSTM
-  - Transformer is a standard [Transformer](https://arxiv.org/pdf/1706.03762.pdf) model for state-of-the-art performance.
+  - **LSTM** is a sequence-to-sequence unidirectional LSTM model similar to the one in [Cho et al., 2014](https://arxiv.org/pdf/1406.1078.pdf), useful as a simple baseline/sanity check.
+  - **ReversingLSTM** is a sequence-to-sequence unidirectional LSTM model that reverses the order of the tokens in the input, similar to the one in [Sutskever et al., 2014](https://arxiv.org/pdf/1409.3215.pdf). A bit more complex than LSTM but gives better performance.
+  - **Transformer** is a standard [Transformer](https://arxiv.org/pdf/1706.03762.pdf) model for state-of-the-art performance.
 
 
 ## Installation
