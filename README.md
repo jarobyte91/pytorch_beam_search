@@ -95,5 +95,5 @@ If you are having issues, feel free to contact me at jarobyte91@gmail.com
 
 ## License
 
-The project is licensed under the GPL-3.0 License.
+The project is licensed under the MIT License.
 
