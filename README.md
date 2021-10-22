@@ -9,7 +9,8 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     from pytorch_beam_search import autoregressive
 
     # Create vocabulary and examples
-    corpus = list("abcdefghijklmnopqrstwxyz ")    # tokenize the way you need
+    # tokenize the way you need
+    corpus = list("abcdefghijklmnopqrstwxyz ")    
     # len(corpus) == 25
     # An Index object represents a mapping from the vocabulary to
     # to integers (indices) to feed into the models
@@ -39,8 +40,9 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     from pytorch_beam_search import seq2seq
 
     # Create vocabularies
-    source = [list("abcdefghijkl"), list("mnopqrstwxyz")]    # tokenize the way you need
-    target = [list("ABCDEFGHIJKL"), list("MNOPQRSTWXYZ")]    # tokenize the way you need
+    # Tokenize the way you need
+    source = [list("abcdefghijkl"), list("mnopqrstwxyz")]
+    target = [list("ABCDEFGHIJKL"), list("MNOPQRSTWXYZ")]
     # An Index object represents a mapping from the vocabulary to
     # to integers (indices) to feed into the models
     source_index = seq2seq.Index(source)
