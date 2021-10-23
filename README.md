@@ -12,7 +12,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     # tokenize the way you need
     corpus = list("abcdefghijklmnopqrstwxyz ")    
     # len(corpus) == 25
-    # An Index object represents a mapping from the vocabulary to
+    # An Index object represents a mapping from the vocabulary
     # to integers (indices) to feed into the models
     index = autoregressive.Index(corpus)
     n_gram_size = 17    # 16 with an offset of 1 
@@ -43,7 +43,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     # Tokenize the way you need
     source = [list("abcdefghijkl"), list("mnopqrstwxyz")]
     target = [list("ABCDEFGHIJKL"), list("MNOPQRSTWXYZ")]
-    # An Index object represents a mapping from the vocabulary to
+    # An Index object represents a mapping from the vocabulary
     # to integers (indices) to feed into the models
     source_index = seq2seq.Index(source)
     target_index = seq2seq.Index(target)
