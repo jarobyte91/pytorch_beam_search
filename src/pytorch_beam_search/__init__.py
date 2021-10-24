@@ -1,2 +1,2 @@
-from .autoregressive import *
-from .seq2seq import *
+from . import autoregressive
+from . import seq2seq
