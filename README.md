@@ -1,4 +1,4 @@
-# Pytorch Beam Search
+# PyTorch Beam Search
 
 This library implements fully vectorized Beam Search, Greedy Search and sampling for sequence models written in PyTorch. This is specially useful for tasks in Natural Language Processing, but can also be used for anything that requires generating a sequence from a sequence model.
 
