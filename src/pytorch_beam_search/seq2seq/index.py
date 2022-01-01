@@ -7,7 +7,7 @@ import re
 class Index():
     def __init__(self, corpus):
         self.special_tokens = ["<PAD>", "<START>", "<END>"]
-        self.vocabulary = lm.Vocabulary(sum(corpus, start = []))
+        self.vocabulary = lm.Vocabulary([item for example in tqdm(corpus) for item in example])
         tokens = self.special_tokens + list(sorted(self.vocabulary))
         self.voc2idx = {c:i for i, c in enumerate(tokens)}
         self.idx2voc = {i:c for i, c in enumerate(tokens)}
