@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.utils.data as tud
 from timeit import default_timer as timer
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 import pandas as pd
 import warnings
 
@@ -29,7 +29,7 @@ class Seq2Seq(nn.Module):
             epochs = 5, 
             learning_rate = 10**-4, 
             weight_decay = 0, 
-            progress_bar = 2, 
+            progress_bar = 0, 
             save_path = None):
         """
         A generic training method with Adam and Cross Entropy.
@@ -161,6 +161,7 @@ class Seq2Seq(nn.Module):
                     torch.save(self.state_dict(), save_path)
             status_string += f" | {t:>7.1f}"
             print(status_string)
+        print()
         return pd.concat((pd.DataFrame(performance), 
                           pd.DataFrame([self.architecture for i in performance])), axis = 1)\
                .drop(columns = ["source_index", "target_index"])
@@ -171,7 +172,7 @@ class Seq2Seq(nn.Module):
                  Y, 
                  criterion = nn.CrossEntropyLoss(), 
                  batch_size = 128, 
-                 progress_bar = True):
+                 progress_bar = False):
         """
         Evaluates the model on a dataset.
         

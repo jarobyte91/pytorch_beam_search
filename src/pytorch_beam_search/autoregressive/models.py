@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.utils.data as tud
 from timeit import default_timer as timer
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 import pandas as pd
 import warnings
 
@@ -16,15 +16,17 @@ class Autoregressive(nn.Module):
         print(f"Trainable parameters: {sum([p.numel() for p in self.parameters()]):,}")
         print()
         
-    def fit(self, 
-            X_train,
-            X_dev = None,
-            batch_size = 128, 
-            epochs = 5, 
-            learning_rate = 10**-4, 
-            progress_bar = 2, 
-            weight_decay = 0, 
-            save_path = None):
+    def fit(
+        self, 
+        X_train,
+        X_dev = None,
+        batch_size = 128, 
+        epochs = 5, 
+        learning_rate = 10**-4, 
+        progress_bar = 0, 
+        weight_decay = 0, 
+        save_path = None
+    ):
         """
         A generic training method with Adam and Cross Entropy.
 
@@ -74,9 +76,17 @@ class Autoregressive(nn.Module):
         else:
             dev = False
         train_dataset = tud.TensorDataset(X_train)
-        train_loader = tud.DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
+        train_loader = tud.DataLoader(
+            train_dataset, 
+            batch_size = batch_size, 
+            shuffle = True
+        )
         criterion = nn.CrossEntropyLoss(ignore_index = 0)
-        optimizer = torch.optim.Adam(self.parameters(), lr = learning_rate, weight_decay = weight_decay)
+        optimizer = torch.optim.Adam(
+            self.parameters(), 
+            lr = learning_rate, 
+            weight_decay = weight_decay
+        )
         performance = []
         start = timer()
         epochs_iterator = range(1, epochs + 1)
@@ -129,31 +139,45 @@ class Autoregressive(nn.Module):
                       "train_loss": train_loss,
                       "train_error_rate": train_error_rate}
             if dev:
-                dev_loss, dev_error_rate = self.evaluate(X_dev, 
-                                                         batch_size = batch_size, 
-                                                         progress_bar = progress_bar > 2, 
-                                                         criterion = criterion)
+                dev_loss, dev_error_rate = self.evaluate(
+                    X_dev, 
+                    batch_size = batch_size, 
+                    progress_bar = progress_bar > 2, 
+                    criterion = criterion
+                )
                 status_string += f" | {dev_loss:>8.4f} | {dev_error_rate:>10.3f}"
-                status.update({"dev_loss": dev_loss, "dev_error_rate": dev_error_rate})
+                status.update(
+                    {
+                        "dev_loss": dev_loss, 
+                        "dev_error_rate": dev_error_rate
+                    }
+                )
             status.update({"training_minutes": t,
                            "learning_rate": learning_rate,
                            "weight_decay": weight_decay})
             performance.append(status)
             if save_path is not None:  
-                if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"] for p in performance[:-1]])):
+                if (not dev) or (e < 2) or (dev_loss < min([p["dev_loss"]\
+                for p in performance[:-1]])):
                     torch.save(self.state_dict(), save_path)
             status_string += f" | {t:>7.1f}"
             print(status_string)
-        return pd.concat((pd.DataFrame(performance), 
-                          pd.DataFrame([self.architecture for i in performance])), axis = 1)\
-               .drop(columns = "index")
+        return pd.concat(
+            (
+                pd.DataFrame(performance), 
+                pd.DataFrame([self.architecture for i in performance])
+            ), 
+            axis = 1
+        ).drop(columns = "index")
     
             
-    def evaluate(self, 
-                 X, 
-                 criterion = nn.CrossEntropyLoss(), 
-                 batch_size = 128, 
-                 progress_bar = True):
+    def evaluate(
+        self, 
+        X, 
+        criterion = nn.CrossEntropyLoss(), 
+        batch_size = 128, 
+        progress_bar = False
+    ):
         """
         Evaluates the model on a dataset.
         
@@ -241,18 +265,25 @@ class LSTM(Autoregressive):
         """
         super().__init__()
         self.index = index
-        self.embeddings = nn.Embedding(len(index.voc2idx), embedding_dimension)
-        self.rnn = nn.LSTM(input_size = embedding_dimension, 
-                           hidden_size = hidden_units, 
-                           num_layers = layers,
-                           dropout = dropout)
+        self.embeddings = nn.Embedding(
+            len(index.voc2idx), 
+            embedding_dimension
+        )
+        self.rnn = nn.LSTM(
+            input_size = embedding_dimension, 
+            hidden_size = hidden_units, 
+            num_layers = layers,
+            dropout = dropout
+        )
         self.output_layer = nn.Linear(hidden_units, len(index.idx2voc))
-        self.architecture = dict(model = "Autoregressive LSTM",
-                                 index = index,
-                                 embedding_dimension = embedding_dimension,
-                                 hidden_units = hidden_units, 
-                                 layers = layers,
-                                 dropout = dropout)
+        self.architecture = dict(
+            model = "Autoregressive LSTM",
+            index = index,
+            embedding_dimension = embedding_dimension,
+            hidden_units = hidden_units, 
+            layers = layers,
+            dropout = dropout
+        )
         self.print_architecture()
         
     def forward(self, X):
@@ -275,15 +306,17 @@ class LSTM(Autoregressive):
     
     
 class TransformerEncoder(Autoregressive):    
-    def __init__(self, 
-                 index, 
-                 max_sequence_length = 16,
-                 embedding_dimension = 32,
-                 feedforward_dimension = 128,
-                 layers = 2,
-                 attention_heads = 2,
-                 activation = "relu",
-                 dropout = 0.0):
+    def __init__(
+        self, 
+        index, 
+        max_sequence_length = 16,
+        embedding_dimension = 32,
+        feedforward_dimension = 128,
+        layers = 2,
+        attention_heads = 2,
+        activation = "relu",
+        dropout = 0.0
+    ):
         """
         The standard PyTorch implementation of a Transformer Encoder.
         
@@ -316,25 +349,40 @@ class TransformerEncoder(Autoregressive):
         """
         super().__init__()
         self.index = index
-        self.embeddings = nn.Embedding(len(index.idx2voc), embedding_dimension)
-        self.positional_embeddings = nn.Embedding(max_sequence_length, embedding_dimension)
-        self.transformer_layer = nn.TransformerEncoderLayer(d_model = embedding_dimension, 
-                                                            dim_feedforward = feedforward_dimension,
-                                                            nhead = attention_heads, 
-                                                            activation = activation,
-                                                            dropout = dropout)
-        self.encoder = nn.TransformerEncoder(encoder_layer = self.transformer_layer,
-                                             num_layers = layers)
-        self.output_layer = nn.Linear(embedding_dimension, len(index.idx2voc))
-        self.architecture = dict(model = "Autoregressive Transformer Encoder",
-                                 index = index,
-                                 max_sequence_length = max_sequence_length,
-                                 embedding_dimension = embedding_dimension,
-                                 feedforward_dimension = feedforward_dimension,
-                                 layers = layers,
-                                 attention_heads = attention_heads,
-                                 activation = activation,
-                                 dropout = dropout)
+        self.embeddings = nn.Embedding(
+            len(index.idx2voc), 
+            embedding_dimension
+        )
+        self.positional_embeddings = nn.Embedding(
+            max_sequence_length, 
+            embedding_dimension
+        )
+        self.transformer_layer = nn.TransformerEncoderLayer(
+            d_model = embedding_dimension, 
+            dim_feedforward = feedforward_dimension,
+            nhead = attention_heads, 
+            activation = activation,
+            dropout = dropout
+        )
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer = self.transformer_layer,
+            num_layers = layers
+        )
+        self.output_layer = nn.Linear(
+            embedding_dimension, 
+            len(index.idx2voc)
+        )
+        self.architecture = dict(
+            model = "Autoregressive Transformer Encoder",
+            index = index,
+            max_sequence_length = max_sequence_length,
+            embedding_dimension = embedding_dimension,
+            feedforward_dimension = feedforward_dimension,
+            layers = layers,
+            attention_heads = attention_heads,
+            activation = activation,
+            dropout = dropout
+        )
         self.print_architecture()
         
     def forward(self, X, warn_last_tokens = True):
@@ -355,10 +403,13 @@ class TransformerEncoder(Autoregressive):
             warnings.warn(f"Max sequence length exceded, only using the last {self.architecture['max_sequence_length']} tokens of the input. You can disable this warning with the warn_last_tokens parameter of the forward method.", category = RuntimeWarning)
         X = X[:, -self.architecture["max_sequence_length"]:]
         X = self.embeddings(X)
-        X_positional = torch.arange(X.shape[1], device = X.device).repeat((X.shape[0], 1))
+        X_positional = torch.arange(X.shape[1], device = X.device)\
+            .repeat((X.shape[0], 1))
         X_positional = self.positional_embeddings(X_positional)
         X = (X + X_positional).transpose(0, 1)
-        mask = (torch.triu(torch.ones(X.shape[0], X.shape[0])) == 1).transpose(0, 1).to(X.device)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        mask = (torch.triu(torch.ones(X.shape[0], X.shape[0])) == 1)\
+            .transpose(0, 1).to(X.device)
+        mask = mask.float().masked_fill(mask == 0, float('-inf'))\
+            .masked_fill(mask == 1, float(0.0))
         output = self.encoder.forward(src = X, mask = mask).transpose(0, 1)
         return self.output_layer(output)

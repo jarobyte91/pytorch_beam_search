@@ -10,7 +10,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
 
     # Create vocabulary and examples
     # tokenize the way you need
-    corpus = list("abcdefghijklmnopqrstwxyz ")    
+    corpus = list("abcdefghijklmnopqrstwxyz ")
     # len(corpus) == 25
     # An Index object represents a mapping from the vocabulary
     # to integers (indices) to feed into the models

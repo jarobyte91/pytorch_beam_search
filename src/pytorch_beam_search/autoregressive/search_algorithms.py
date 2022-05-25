@@ -1,12 +1,14 @@
 import torch
 import torch.utils.data as tud
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 import warnings
 
-def greedy_search(model, 
-                  X, 
-                  max_predictions = 20,
-                  progress_bar = True):
+def greedy_search(
+    model, 
+    X, 
+    predictions = 20,
+    progress_bar = False
+):
     """
     Implements Greedy Search to extend the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -32,8 +34,9 @@ def greedy_search(model,
         probability of the next token at every step.
     """
     with torch.no_grad():
-        probabilities = torch.zeros(X.shape[0]).to(next(model.parameters()).device)
-        iterator = range(max_predictions)
+        probabilities = torch.zeros(X.shape[0])\
+        .to(next(model.parameters()).device)
+        iterator = range(predictions)
         if progress_bar:
             iterator = tqdm(iterator)
         for i in iterator:
@@ -44,11 +47,13 @@ def greedy_search(model,
             probabilities += max_next_probabilities
     return X, probabilities
 
-def sample(model, 
-           X, 
-           max_predictions = 20,
-           temperature = 1,
-           progress_bar = True):
+def sample(
+    model, 
+    X, 
+    predictions = 20,
+    temperature = 1,
+    progress_bar = False
+):
     """
     Samples the sequence distribution to extend the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -77,25 +82,35 @@ def sample(model,
         probability of the next token at every step.
     """
     with torch.no_grad():
-        probabilities = torch.zeros(X.shape[0]).to(next(model.parameters()).device)
-        iterator = range(max_predictions)
+        probabilities = torch.zeros(X.shape[0])\
+            .to(next(model.parameters()).device)
+        iterator = range(predictions)
         if progress_bar:
             iterator = tqdm(iterator)
         for i in iterator:
             next_probabilities = model.forward(X)[:, -1]
-            next_probabilities = (next_probabilities / temperature).softmax(1)
-            random = torch.rand((next_probabilities.shape[0], 1)).to(next(model.parameters()).device)
-            next_chars = ((next_probabilities.cumsum(1) < random).sum(1, keepdims = True))
-            probabilities += torch.gather(input = next_probabilities.log(), dim = 1, index = next_chars).squeeze()
+            next_probabilities = (next_probabilities / temperature)\
+                .softmax(1)
+            random = torch.rand((next_probabilities.shape[0], 1))\
+                .to(next(model.parameters()).device)
+            next_chars = (next_probabilities.cumsum(1) < random)\
+                .sum(1, keepdims = True)
+            probabilities += torch.gather(
+                input = next_probabilities.log(), 
+                dim = 1, 
+                index = next_chars
+            ).squeeze()
             X = torch.cat((X, next_chars), axis = 1)
         return X, probabilities
 
-def beam_search(model, 
-                X, 
-                max_predictions = 20,
-                beam_width = 5,
-                batch_size = 128, 
-                progress_bar = 1):
+def beam_search(
+    model, 
+    X, 
+    predictions = 20,
+    beam_width = 5,
+    batch_size = 128, 
+    progress_bar = 0
+):
     """
     Implements Beam Search to extend the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -132,13 +147,14 @@ def beam_search(model,
         next_probabilities = model.forward(X)[:, -1, :]
         vocabulary_size = next_probabilities.shape[-1]
         probabilities, idx = next_probabilities.squeeze().log_softmax(-1)\
-        .topk(k = beam_width, axis = -1)
-        X = X.repeat((beam_width, 1, 1)).transpose(0, 1).flatten(end_dim = -2)
+            .topk(k = beam_width, axis = -1)
+        X = X.repeat((beam_width, 1, 1)).transpose(0, 1)\
+            .flatten(end_dim = -2)
         next_chars = idx.reshape(-1, 1)
         X = torch.cat((X, next_chars), axis = -1)
         # This has to be minus one because we already produced a round
         # of predictions before the for loop.
-        predictions_iterator = range(max_predictions - 1)
+        predictions_iterator = range(predictions - 1)
         if progress_bar > 0:
             predictions_iterator = tqdm(predictions_iterator)
         for i in predictions_iterator:
@@ -149,15 +165,26 @@ def beam_search(model,
             if progress_bar > 1:
                 iterator = tqdm(iterator)
             for (x,) in iterator:
-                next_probabilities.append(model.forward(x)[:, -1, :].log_softmax(-1))
+                next_probabilities.append(
+                    model.forward(x)[:, -1, :].log_softmax(-1)
+                )
             next_probabilities = torch.cat(next_probabilities, axis = 0)
-            next_probabilities = next_probabilities.reshape((-1, beam_width, next_probabilities.shape[-1]))
+            next_probabilities = next_probabilities.reshape(
+                (-1, beam_width, next_probabilities.shape[-1])
+            )
             probabilities = probabilities.unsqueeze(-1) + next_probabilities
             probabilities = probabilities.flatten(start_dim = 1)
-            probabilities, idx = probabilities.topk(k = beam_width, axis = -1)
-            next_chars = torch.remainder(idx, vocabulary_size).flatten().unsqueeze(-1)
+            probabilities, idx = probabilities.topk(
+                k = beam_width, 
+                axis = -1
+            )
+            next_chars = torch.remainder(idx, vocabulary_size).flatten()\
+                .unsqueeze(-1)
             best_candidates = (idx / vocabulary_size).long()
-            best_candidates += torch.arange(X.shape[0] // beam_width, device = X.device).unsqueeze(-1) * beam_width
+            best_candidates += torch.arange(
+                X.shape[0] // beam_width, 
+                device = X.device
+            ).unsqueeze(-1) * beam_width
             X = X[best_candidates].flatten(end_dim = -2)
             X = torch.cat((X, next_chars), axis = 1)
         return X.reshape(-1, beam_width, X.shape[-1]), probabilities

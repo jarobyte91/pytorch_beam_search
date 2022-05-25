@@ -1,12 +1,14 @@
 import torch
 import torch.utils.data as tud
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 import warnings
 
-def greedy_search(model, 
-                  X, 
-                  predictions = 20,
-                  progress_bar = True):
+def greedy_search(
+    model, 
+    X, 
+    predictions = 20,
+    progress_bar = False
+):
     """
     Implements Greedy Search to compute the output with the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -45,11 +47,13 @@ def greedy_search(model,
             probabilities += max_next_probabilities
     return Y, probabilities
 
-def sample(model, 
-           X, 
-           predictions = 20,
-           temperature = 1.0,
-           progress_bar = True):
+def sample(
+    model, 
+    X, 
+    predictions = 20,
+    temperature = 1.0,
+    progress_bar = False
+):
     """
     Samples the sequence distribution to compute the output with the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -92,12 +96,14 @@ def sample(model,
             Y = torch.cat((Y, next_chars), axis = 1)
         return Y, probabilities
 
-def beam_search(model, 
-                X, 
-                predictions = 20,
-                beam_width = 5,
-                batch_size = 50, 
-                progress_bar = 1):
+def beam_search(
+    model, 
+    X, 
+    predictions = 20,
+    beam_width = 5,
+    batch_size = 50, 
+    progress_bar = 0
+):
     """
     Implements Beam Search to compute the output with the sequences given in X. The method can compute 
     several outputs in parallel with the first dimension of X.
@@ -116,8 +122,8 @@ def beam_search(model,
     batch_size: int
         The batch size of the inner loop of the method, which relies on the beam width. 
 
-    progress_bar: bool
-        Shows a tqdm progress bar, useful for tracking progress with large tensors.
+    progress_bar: int 
+        Shows a tqdm progress bar, useful for tracking progress with large tensors. Ranges from 0 to 2.
 
     Returns
     -------
