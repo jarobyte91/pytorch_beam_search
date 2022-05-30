@@ -27,7 +27,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     model.fit(X)    # basic method included
 
     # Generate new predictions
-    new_examples = ["new first", "new second"]
+    new_examples = [list("new first"), list("new second")]
     X_new = index.text2tensor(new_examples)
     loss, error_rate = model.evaluate(X_new)    # basic method included
     predictions, log_probabilities = autoregressive.beam_search(model, X_new)

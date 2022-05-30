@@ -30,7 +30,7 @@ model.fit(X)    # basic method included
 
 # Generate new predictions
 print("\ntest data")
-new_examples = ["new first", "new second"]
+new_examples = [list("new first"), list("new second")]
 pprint(new_examples)
 print("\ncreating tensor...")
 X_new = index.text2tensor(new_examples)
