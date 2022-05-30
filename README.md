@@ -9,7 +9,7 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     from pytorch_beam_search import autoregressive
 
     # Create vocabulary and examples
-    # tokenize the way you need
+    # Tokenize the way you need
     corpus = list("abcdefghijklmnopqrstwxyz ")
     # len(corpus) == 25
     # An Index object represents a mapping from the vocabulary
