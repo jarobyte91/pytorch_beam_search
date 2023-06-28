@@ -94,10 +94,8 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
 ## Contribute
 
 - [Issue Tracker](https://github.com/jarobyte91/pytorch_beam_search/issues)
+- [Pull Requests](https://github.com/jarobyte91/pytorch_beam_search/pulls)
 
-## Support
-
-If you are having issues, feel free to contact me at jarobyte91@gmail.com
 
 ## License
 
