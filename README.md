@@ -14,19 +14,23 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
     # len(corpus) == 25
     # An Index object represents a mapping from the vocabulary
     # to integers (indices) to feed into the models
+    
     index = autoregressive.Index(corpus)
     n_gram_size = 17    # 16 with an offset of 1 
     n_grams = [corpus[i:n_gram_size + i] for i in range(len(corpus))[:-n_gram_size + 1]]
 
     # Create tensor
+    
     X = index.text2tensor(n_grams)
     # X.shape == (n_examples, len_examples) == (25 - 17 + 1 = 9, 17)
 
     # Create and train the model
+    
     model = autoregressive.TransformerEncoder(index)    # just a PyTorch model
     model.fit(X)    # basic method included
 
     # Generate new predictions
+    
     new_examples = [list("new first"), list("new second")]
     X_new = index.text2tensor(new_examples)
     loss, error_rate = model.evaluate(X_new)    # basic method included
@@ -41,24 +45,30 @@ This library implements fully vectorized Beam Search, Greedy Search and sampling
 
     # Create vocabularies
     # Tokenize the way you need
+    
     source = [list("abcdefghijkl"), list("mnopqrstwxyz")]
     target = [list("ABCDEFGHIJKL"), list("MNOPQRSTWXYZ")]
+    
     # An Index object represents a mapping from the vocabulary
     # to integers (indices) to feed into the models
+    
     source_index = seq2seq.Index(source)
     target_index = seq2seq.Index(target)
 
     # Create tensors
+    
     X = source_index.text2tensor(source)
     Y = target_index.text2tensor(target)
     # X.shape == (n_source_examples, len_source_examples) == (2, 11)
     # Y.shape == (n_target_examples, len_target_examples) == (2, 12)
 
     # Create and train the model
+    
     model = seq2seq.Transformer(source_index, target_index)    # just a PyTorch model
     model.fit(X, Y, epochs = 100)    # basic method included
 
     # Generate new predictions
+    
     new_source = [list("new first in"), list("new second in")]
     new_target = [list("new first out"), list("new second out")]
     X_new = source_index.text2tensor(new_source)
